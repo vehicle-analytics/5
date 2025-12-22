@@ -43,30 +43,13 @@ class CarAnalyticsApp {
     }
     
     // Функція для конвертації числа в тисячі (якщо потрібно)
-    convertToThousands(value) {
-        if (value === null || value === undefined || isNaN(value)) {
-            return 0;
-        }
-        
-        // Якщо число менше 1000, можливо воно вже в тисячах
-        if (value < 1000 && value > 100) {
-            // Може бути 352 (означає 352 000)
-            return value * 1000;
-        }
-        
-        // Якщо число більше 1000000, можливо воно вже в одиницях
-        if (value > 1000000) {
-            return value;
-        }
-        
-        // Якщо число між 1000 і 100000, можливо воно в тисячах
-        if (value >= 1000 && value <= 100000) {
-            return value * 1000;
-        }
-        
-        // Для всіх інших випадків залишаємо як є
-        return value;
+   convertToThousands(value) {
+    if (value === null || value === undefined || isNaN(value)) {
+        return 0;
     }
+    // Повертаємо значення так, як воно є в таблиці
+    return value;
+}
     
     // Функція для форматування чисел з пробілами
     formatNumber(number) {
