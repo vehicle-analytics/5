@@ -1,6 +1,6 @@
 /**
  * 🚗 Аналітична панель відстеження запчастин
- * Версія 2.3 - Виправлене форматування кілометражу
+ * Версія 3.0 - Повний код з правильним форматуванням кілометражу
  */
 
 class CarAnalyticsApp {
@@ -122,6 +122,42 @@ class CarAnalyticsApp {
         return roundedPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     }
     
+    setupEventListeners() {
+        // Кнопка оновлення даних
+        document.getElementById('refresh-data')?.addEventListener('click', () => {
+            this.refreshData(true);
+        });
+        
+        // Кнопка очищення кешу
+        document.getElementById('clear-cache')?.addEventListener('click', () => {
+            this.clearCache();
+        });
+        
+        // Глобальні гарячі клавіші
+        document.addEventListener('keydown', (e) => {
+            // ESC - повернення до списку
+            if (e.key === 'Escape' && this.state.selectedCar) {
+                this.state.selectedCar = null;
+                this.state.selectedHistoryPartFilter = null;
+                this.state.historySearchTerm = '';
+                this.render();
+            }
+            
+            // Ctrl+R - оновлення даних
+            if (e.ctrlKey && e.key === 'r') {
+                e.preventDefault();
+                this.refreshData(true);
+            }
+        });
+    }
+    
+    updateLoadingProgress(percent) {
+        const bar = document.getElementById('loading-bar');
+        if (bar) {
+            bar.style.width = `${percent}%`;
+        }
+    }
+    
     async loadData() {
         console.log('📥 Завантаження даних...');
         
@@ -193,6 +229,8 @@ class CarAnalyticsApp {
         const carCities = {};
         
         // Обробка графіку обслуговування
+        console.log('Перші 3 рядки графіку:', scheduleData.slice(0, 3));
+        
         for (let i = 1; i < scheduleData.length; i++) {
             const row = scheduleData[i];
             
@@ -216,12 +254,14 @@ class CarAnalyticsApp {
         }
         
         const allowedCars = Object.keys(carsInfo);
-        console.log(`🚗 Знайдено ${allowedCars.length} автомобілів`);
+        console.log(`🚗 Знайдено ${allowedCars.length} автомобілів:`, allowedCars);
         
         // Обробка історичних даних
         const records = [];
         const currentMileages = {};
         const allowedCarsSet = new Set(allowedCars);
+        
+        console.log('Перші 3 рядки історії:', historyData.slice(0, 3));
         
         for (let i = 1; i < historyData.length; i++) {
             const row = historyData[i];
@@ -298,7 +338,7 @@ class CarAnalyticsApp {
         if (records.length > 0) {
             console.log('Приклади пробігів з історії:');
             records.slice(0, 3).forEach((record, i) => {
-                console.log(`  ${i+1}. ${record.car}: ${record.originalMileage} -> ${record.mileage} км`);
+                console.log(`  ${i+1}. ${record.car}: "${record.originalMileage}" -> ${this.formatMileage(record.mileage)}`);
             });
         }
         
@@ -320,6 +360,110 @@ class CarAnalyticsApp {
         document.getElementById('cars-count').textContent = allowedCars.length;
     }
     
+    parseDate(dateString) {
+        if (!dateString) return null;
+        
+        // Спробуємо різні формати
+        const formats = [
+            // ISO формат
+            () => new Date(dateString),
+            // ДД.ММ.РРРР
+            () => {
+                const parts = dateString.split('.');
+                if (parts.length === 3) {
+                    return new Date(parts[2], parts[1] - 1, parts[0]);
+                }
+                return null;
+            },
+            // РРРР-ММ-ДД
+            () => {
+                const parts = dateString.split('-');
+                if (parts.length === 3) {
+                    return new Date(parts[0], parts[1] - 1, parts[2]);
+                }
+                return null;
+            }
+        ];
+        
+        for (const format of formats) {
+            try {
+                const date = format();
+                if (date && !isNaN(date.getTime())) {
+                    return date;
+                }
+            } catch (e) {
+                // Продовжуємо спроби
+            }
+        }
+        
+        return null;
+    }
+    
+    getCachedData() {
+        try {
+            const cached = localStorage.getItem('carAnalyticsData');
+            if (!cached) return null;
+            
+            const data = JSON.parse(cached);
+            
+            // Перевірка актуальності
+            const cacheTime = new Date(data.lastUpdated).getTime();
+            const currentTime = Date.now();
+            const maxAge = 5 * 60 * 1000; // 5 хвилин
+            
+            if (currentTime - cacheTime > maxAge) {
+                console.log(`⚠️ Кеш застарів (${Math.floor((currentTime - cacheTime) / 1000 / 60)} хв)`);
+                return null;
+            }
+            
+            return data;
+        } catch (error) {
+            console.warn('⚠️ Помилка читання кешу:', error);
+            return null;
+        }
+    }
+    
+    cacheData(data) {
+        try {
+            const dataString = JSON.stringify(data);
+            localStorage.setItem('carAnalyticsData', dataString);
+            localStorage.setItem('carAnalyticsCacheTime', new Date().toISOString());
+            
+            console.log('💾 Дані збережено в кеш');
+        } catch (error) {
+            console.warn('⚠️ Помилка збереження кешу:', error);
+        }
+    }
+    
+    clearCache() {
+        try {
+            localStorage.removeItem('carAnalyticsData');
+            localStorage.removeItem('carAnalyticsCacheTime');
+            
+            console.log('🗑️ Кеш очищено');
+            this.showNotification('Кеш успішно очищено', 'success');
+            this.updateCacheInfo();
+        } catch (error) {
+            console.error('❌ Помилка очищення кешу:', error);
+            this.showNotification('Помилка очищення кешу', 'error');
+        }
+    }
+    
+    updateCacheInfo() {
+        try {
+            const cacheTime = localStorage.getItem('carAnalyticsCacheTime');
+            if (cacheTime) {
+                const time = new Date(cacheTime);
+                const now = new Date();
+                const diffMinutes = Math.floor((now - time) / (1000 * 60));
+                
+                console.log(`⏰ Кеш оновлено ${diffMinutes} хвилин тому`);
+            }
+        } catch (error) {
+            // Ігноруємо помилки
+        }
+    }
+    
     // Основний рендеринг
     render() {
         if (!this.appData) {
@@ -327,6 +471,7 @@ class CarAnalyticsApp {
             return;
         }
         
+        // Перевірка, чи є дані
         if (this.appData._meta.totalCars === 0) {
             this.renderNoData();
             return;
@@ -337,6 +482,34 @@ class CarAnalyticsApp {
         } else {
             this.renderCarList();
         }
+    }
+    
+    renderNoData() {
+        const html = `
+            <div class="min-h-screen flex flex-col items-center justify-center p-4">
+                <div class="text-center max-w-md">
+                    <div class="text-4xl mb-4">🚫</div>
+                    <h1 class="text-2xl font-bold text-white mb-2">Немає даних</h1>
+                    <p class="text-blue-200 text-sm mb-6">Не знайдено автомобілів для відображення</p>
+                    <div class="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                        <div class="text-white text-sm mb-3">
+                            Можливі причини:
+                            <ul class="text-left mt-2 text-blue-200">
+                                <li>• Аркуш "ГРАФІК ОБСЛУГОВУВАННЯ" порожній</li>
+                                <li>• Неправильні назви аркушів</li>
+                                <li>• Проблеми з API ключем</li>
+                            </ul>
+                        </div>
+                        <button onclick="app.refreshData(true)" 
+                                class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors w-full">
+                            🔄 Спробувати знову
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('main-interface').innerHTML = html;
     }
     
     renderCarList() {
@@ -361,6 +534,187 @@ class CarAnalyticsApp {
         
         const html = this.generateCarDetailHTML(car);
         document.getElementById('main-interface').innerHTML = html;
+    }
+    
+    // Обробка даних для відображення
+    processCarData() {
+        if (!this.appData) return [];
+        
+        const { records, carsInfo, currentMileages, partKeywords, partsOrder, currentDate } = this.appData;
+        const cars = {};
+        
+        console.log('🔍 Обробка даних для відображення...');
+        console.log('Кількість записів:', records.length);
+        console.log('Кількість автомобілів:', Object.keys(carsInfo).length);
+        
+        // Обробка кожної машини
+        for (const license in carsInfo) {
+            const carInfo = carsInfo[license];
+            const currentMileage = currentMileages[license] || 0;
+            
+            cars[license] = {
+                city: carInfo.city,
+                car: license,
+                license: license,
+                model: carInfo.model,
+                year: carInfo.year,
+                currentMileage: currentMileage,
+                parts: {},
+                history: []
+            };
+            
+            // Ініціалізація частин
+            partsOrder.forEach(partName => {
+                cars[license].parts[partName] = null;
+            });
+        }
+        
+        // Обробка історії
+        records.forEach(record => {
+            const car = cars[record.car];
+            if (!car) return;
+            
+            // Додавання запису в історію
+            car.history.push(record);
+            
+            // Визначення частин з ключових слів
+            for (const partName in partKeywords) {
+                if (this.matchesKeywords(record.description, partKeywords[partName])) {
+                    const existingPart = car.parts[partName];
+                    
+                    if (!existingPart || record.mileage > existingPart.mileage) {
+                        const mileageDiff = car.currentMileage - record.mileage;
+                        const daysDiff = Math.floor((new Date(currentDate) - new Date(record.date)) / (1000 * 60 * 60 * 24));
+                        const carYear = parseInt(car.year) || 0;
+                        const carModel = car.model || '';
+                        
+                        const years = Math.floor(daysDiff / 365);
+                        const months = Math.floor((daysDiff % 365) / 30);
+                        let timeDiff = '';
+                        
+                        if (years > 0) timeDiff += years + 'р ';
+                        if (months > 0) timeDiff += months + 'міс';
+                        if (!timeDiff) timeDiff = daysDiff + 'дн';
+                        
+                        car.parts[partName] = {
+                            date: record.date,
+                            mileage: record.mileage,
+                            currentMileage: car.currentMileage,
+                            mileageDiff: mileageDiff,
+                            timeDiff: timeDiff,
+                            daysDiff: daysDiff,
+                            status: this.getPartStatus(partName, mileageDiff, daysDiff, carYear, carModel)
+                        };
+                    }
+                }
+            }
+        });
+        
+        // Сортування
+        const sortedCars = Object.values(cars);
+        sortedCars.sort((a, b) => {
+            const cityCompare = (a.city || '').localeCompare(b.city || '', 'uk');
+            return cityCompare !== 0 ? cityCompare : (a.license || '').localeCompare(b.license || '', 'uk');
+        });
+        
+        // Сортування історії
+        sortedCars.forEach(car => {
+            car.history.sort((a, b) => new Date(b.date) - new Date(a.date));
+        });
+        
+        console.log('✅ Оброблено автомобілів:', sortedCars.length);
+        
+        // Додамо логування для перевірки
+        if (sortedCars.length > 0) {
+            const sampleCar = sortedCars[0];
+            console.log('Приклад автомобіля:', {
+                license: sampleCar.license,
+                currentMileage: `${this.formatMileage(sampleCar.currentMileage)} (оригінал: ${sampleCar.currentMileage})`,
+                partsCount: Object.keys(sampleCar.parts).length,
+                hasPartsData: Object.values(sampleCar.parts).filter(p => p !== null).length
+            });
+        }
+        
+        return sortedCars;
+    }
+    
+    filterCars(cars) {
+        const { searchTerm, selectedCity, selectedStatus, selectedPartFilter } = this.state;
+        const term = searchTerm.toLowerCase();
+        const isAllCities = selectedCity === 'Всі міста';
+        
+        return cars.filter(car => {
+            // Пошук за текстом
+            if (term && !(
+                (car.car && car.car.toLowerCase().includes(term)) ||
+                (car.city && car.city.toLowerCase().includes(term)) ||
+                (car.model && car.model.toLowerCase().includes(term)) ||
+                (car.license && car.license.toLowerCase().includes(term))
+            )) return false;
+            
+            // Фільтр за містом
+            if (!isAllCities && car.city !== selectedCity) return false;
+            
+            // Фільтр за статусом
+            if (selectedStatus !== 'all') {
+                let hasStatus = false;
+                for (const partName in car.parts) {
+                    const part = car.parts[partName];
+                    if (part && part.status === selectedStatus) {
+                        hasStatus = true;
+                        break;
+                    }
+                }
+                if (!hasStatus) return false;
+            }
+            
+            // Фільтр за частиною
+            if (selectedPartFilter) {
+                const part = car.parts[selectedPartFilter.partName];
+                if (selectedPartFilter.status === 'all') {
+                    if (!part) return false;
+                } else if (!part || part.status !== selectedPartFilter.status) {
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+    }
+    
+    getCities(cars) {
+        const cities = new Set(['Всі міста']);
+        cars.forEach(car => {
+            if (car.city) cities.add(car.city);
+        });
+        return Array.from(cities).sort((a, b) => a.localeCompare(b, 'uk'));
+    }
+    
+    calculateStats(cars) {
+        let totalCars = 0;
+        let carsWithGood = 0;
+        let carsWithWarning = 0;
+        let carsWithCritical = 0;
+        
+        cars.forEach(car => {
+            totalCars++;
+            let hasGood = false, hasWarning = false, hasCritical = false;
+            
+            for (const partName in car.parts) {
+                const part = car.parts[partName];
+                if (part) {
+                    if (part.status === 'good') hasGood = true;
+                    if (part.status === 'warning') hasWarning = true;
+                    if (part.status === 'critical') hasCritical = true;
+                }
+            }
+            
+            if (hasGood) carsWithGood++;
+            if (hasWarning) carsWithWarning++;
+            if (hasCritical) carsWithCritical++;
+        });
+        
+        return { totalCars, carsWithGood, carsWithWarning, carsWithCritical };
     }
     
     // Генерація HTML
@@ -415,6 +769,81 @@ class CarAnalyticsApp {
         `;
     }
     
+    generateStatsCards(stats) {
+        const { totalCars, carsWithGood, carsWithWarning, carsWithCritical } = stats;
+        const { selectedStatus } = this.state;
+        
+        const cards = [
+            { count: totalCars, label: 'Всього авто', status: 'all', color: 'from-blue-500 to-blue-600', icon: '🚗' },
+            { count: carsWithGood, label: 'У нормі', status: 'good', color: 'from-green-500 to-green-600', icon: '✅' },
+            { count: carsWithWarning, label: 'Увага', status: 'warning', color: 'from-orange-500 to-orange-600', icon: '⚠️' },
+            { count: carsWithCritical, label: 'Критично', status: 'critical', color: 'from-red-500 to-red-600', icon: '⛔' }
+        ];
+        
+        return cards.map(card => `
+            <div class="bg-gradient-to-br ${card.color} rounded-lg shadow-lg p-4 text-white cursor-pointer hover:shadow-xl transition-all ${selectedStatus === card.status ? 'ring-2 ring-blue-300' : ''}" 
+                 onclick="app.setState({ selectedStatus: '${card.status}' }); app.render();">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-2xl sm:text-3xl font-bold mb-1">${card.count}</div>
+                        <div class="text-white/90 text-sm font-medium">${card.label}</div>
+                    </div>
+                    <div class="text-2xl">${card.icon}</div>
+                </div>
+                ${selectedStatus === card.status ? '<div class="text-xs text-white/70 mt-2">● Активний</div>' : ''}
+            </div>
+        `).join('');
+    }
+    
+    generateFiltersHTML(cities) {
+        const { selectedPartFilter, searchTerm, selectedCity } = this.state;
+        
+        return `
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><span>🔍</span> Фільтри</h3>
+                ${selectedPartFilter ? `
+                    <button onclick="app.clearPartFilter();" 
+                            class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-colors">
+                        ✕ Скинути фільтр
+                    </button>
+                ` : ''}
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Пошук авто</label>
+                    <input 
+                        type="text" 
+                        value="${searchTerm}" 
+                        oninput="app.debouncedSearch(this.value)" 
+                        placeholder="Номер, модель, місто..." 
+                        class="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        id="mainSearchInput"
+                    >
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Місто</label>
+                    <select onchange="app.setState({ selectedCity: this.value }); app.render();" 
+                            class="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        ${cities.map(city => `
+                            <option value="${city}" ${city === selectedCity ? 'selected' : ''}>${city}</option>
+                        `).join('')}
+                    </select>
+                </div>
+            </div>
+            ${selectedPartFilter ? `
+                <div class="mt-3 p-3 bg-blue-50 border-2 border-blue-300 rounded-lg">
+                    <div class="text-sm font-semibold text-blue-800 flex items-center gap-2">
+                        <span>📌</span>
+                        <span>Активний фільтр: ${selectedPartFilter.partName} - 
+                        ${selectedPartFilter.status === 'all' ? 'Всі записи' : 
+                          selectedPartFilter.status === 'good' ? '✅ У нормі' : 
+                          selectedPartFilter.status === 'warning' ? '⚠️ Увага' : '⛔ Критично'}</span>
+                    </div>
+                </div>
+            ` : ''}
+        `;
+    }
+    
     generateCarsTable(cars, importantParts) {
         if (cars.length === 0) {
             return `
@@ -455,7 +884,50 @@ class CarAnalyticsApp {
         `;
     }
     
+    generateTableHeaders(importantParts) {
+        return importantParts.map(partName => {
+            let shortName, emoji;
+            
+            if (partName.includes('ТО')) {
+                shortName = 'ТО';
+                emoji = '🛢️';
+            } else if (partName.includes('ГРМ')) {
+                shortName = 'ГРМ';
+                emoji = '⚙️';
+            } else if (partName.includes('Помпа')) {
+                shortName = 'Помпа';
+                emoji = '💧';
+            } else if (partName.includes('Обвід')) {
+                shortName = 'Обвід';
+                emoji = '🔧';
+            } else if (partName.includes('Діагн')) {
+                shortName = 'Діаг';
+                emoji = '🔍';
+            } else if (partName.includes('Розвал')) {
+                shortName = 'Розв';
+                emoji = '📐';
+            } else if (partName.includes('Профілактика') || partName.includes('Супорт')) {
+                shortName = 'Супорт';
+                emoji = '🛠️';
+            } else {
+                shortName = partName.split(' ')[0];
+                emoji = '🔧';
+            }
+            
+            return `
+                <th class="px-2 py-2 text-center text-xs font-bold uppercase">
+                    <div class="cursor-pointer hover:bg-white/10 p-1 rounded" 
+                         onclick="event.stopPropagation(); app.showPartFilterMenu(event, '${partName}')">
+                        <div class="font-bold">${shortName}</div>
+                        <div class="text-xs opacity-70">${emoji}</div>
+                    </div>
+                </th>
+            `;
+        }).join('');
+    }
+    
     generateCarRow(car, idx, importantParts) {
+        // Підрахунок статусів
         const parts = Object.values(car.parts).filter(p => p !== null);
         const criticalCount = parts.filter(p => p.status === 'critical').length;
         const warningCount = parts.filter(p => p.status === 'warning').length;
@@ -656,7 +1128,6 @@ class CarAnalyticsApp {
                         </div>
                         <div class="text-center">
                             <div class="${small ? 'text-sm' : 'text-lg'} font-bold ${textClass}">
-                                <!-- ВИКОРИСТАННЯ ФОРМАТУВАННЯ З ПРОБІЛАМИ -->
                                 ${this.formatMileageDiff(part.mileageDiff)}
                             </div>
                         </div>
@@ -666,6 +1137,86 @@ class CarAnalyticsApp {
                         </div>
                     </div>
                 ` : '<div class="text-gray-300 text-xs text-center py-2">Немає даних</div>'}
+            </div>
+        `;
+    }
+    
+    generateCarHistoryHTML(car, displayHistory) {
+        return `
+            <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <span>📜</span> Історія обслуговування
+                ${this.state.selectedHistoryPartFilter || this.state.historySearchTerm ? `
+                    <div class="flex flex-wrap items-center gap-1">
+                        ${this.state.selectedHistoryPartFilter ? `
+                            <span class="text-xs font-normal text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                🔍 ${this.state.selectedHistoryPartFilter}
+                            </span>
+                        ` : ''}
+                        ${this.state.historySearchTerm ? `
+                            <span class="text-xs font-normal text-green-600 bg-green-50 px-2 py-1 rounded">
+                                🔎 "${this.state.historySearchTerm}"
+                            </span>
+                        ` : ''}
+                        <button onclick="app.setState({ selectedHistoryPartFilter: null, historySearchTerm: '' });" 
+                                class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold transition-colors flex items-center gap-1">
+                            ✕ Скинути всі фільтри
+                        </button>
+                    </div>
+                ` : ''}
+                <span class="ml-auto text-xs font-normal text-gray-600">
+                    ${displayHistory.length} з ${car.history.length} записів
+                </span>
+            </h3>
+            
+            <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-700 mb-1">🔍 Пошук в історії</label>
+                <div class="flex gap-1">
+                    <input 
+                        type="text" 
+                        value="${this.state.historySearchTerm}" 
+                        oninput="app.debouncedHistorySearch(this.value)" 
+                        placeholder="Пошук за текстом, датою або пробігом..." 
+                        class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                        id="historySearchInput"
+                    >
+                    ${this.state.historySearchTerm ? `
+                        <button onclick="app.setState({ historySearchTerm: '' });" 
+                                class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded text-xs font-semibold transition-colors">
+                            ✕
+                        </button>
+                    ` : ''}
+                </div>
+                <div class="text-xs text-gray-400 mt-1">Пошук працює по опису, даті, пробігу, коду запчастини та статусу</div>
+            </div>
+            
+            ${displayHistory.length === 0 ? this.generateNoHistoryHTML() : this.generateHistoryListHTML(displayHistory)}
+        `;
+    }
+    
+    generateNoHistoryHTML() {
+        const hasFilters = this.state.selectedHistoryPartFilter || this.state.historySearchTerm;
+        
+        return `
+            <div class="text-center py-8 text-gray-500">
+                <div class="text-3xl mb-2">🔍</div>
+                <div class="text-base font-semibold">Записів не знайдено</div>
+                <div class="text-xs text-gray-400 mt-1">
+                    ${hasFilters ? 'Спробуйте змінити параметри пошуку або очистити фільтри' : 'Цей автомобіль ще не має записів в історії'}
+                </div>
+                ${hasFilters ? `
+                    <button onclick="app.setState({ selectedHistoryPartFilter: null, historySearchTerm: '' });" 
+                            class="mt-3 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition-colors text-xs">
+                        Очистити всі фільтри
+                    </button>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    generateHistoryListHTML(history) {
+        return `
+            <div class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                ${history.map(record => this.generateHistoryRecordHTML(record)).join('')}
             </div>
         `;
     }
@@ -762,8 +1313,300 @@ class CarAnalyticsApp {
         `;
     }
     
-    // Інші функції залишаються без змін...
-    // ... (решта коду без змін)
+    formatDate(dateString) {
+        if (!dateString) return '';
+        
+        if (dateString.includes('.')) return dateString;
+        
+        if (dateString.includes('-')) {
+            const parts = dateString.split('-');
+            if (parts.length === 3) {
+                const [year, month, day] = parts;
+                return `${day.padStart(2, '0')}.${month.padStart(2, '0')}.${year}`;
+            }
+        }
+        
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}.${month}.${year}`;
+        }
+        
+        return dateString;
+    }
+    
+    filterCarHistory(history, partFilter, searchTerm) {
+        let filtered = [...history];
+        
+        if (partFilter) {
+            const keywords = CONSTANTS.PARTS_CONFIG[partFilter];
+            if (keywords) {
+                filtered = filtered.filter(record => this.matchesKeywords(record.description, keywords));
+            }
+        }
+        
+        if (searchTerm && searchTerm.trim() !== '') {
+            const term = searchTerm.toLowerCase();
+            filtered = filtered.filter(record => 
+                record.description.toLowerCase().includes(term) || 
+                (record.date && record.date.toLowerCase().includes(term)) || 
+                record.mileage.toString().includes(term) ||
+                (record.partCode && record.partCode.toLowerCase().includes(term)) ||
+                (record.unit && record.unit.toLowerCase().includes(term)) ||
+                (record.status && record.status.toLowerCase().includes(term))
+            );
+        }
+        
+        return filtered;
+    }
+    
+    matchesKeywords(description, keywords) {
+        const lowerDesc = description.toLowerCase();
+        for (let i = 0; i < keywords.length; i++) {
+            if (lowerDesc.includes(keywords[i].toLowerCase())) return true;
+        }
+        return false;
+    }
+    
+    getPartStatus(partName, mileageDiff, daysDiff, carYear, carModel) {
+        const monthsDiff = daysDiff / 30;
+        const isMercedesSprinter = carModel && carModel.toLowerCase().includes('mercedes') && carModel.toLowerCase().includes('sprinter');
+        
+        if (isMercedesSprinter) {
+            if (partName === 'ГРМ (ролики+ремінь) ⚙️') {
+                return 'good';
+            }
+            if (partName === 'Помпа 💧') {
+                if (mileageDiff >= 120000) return 'warning';
+                return 'good';
+            }
+        }
+        
+        switch(partName) {
+            case 'ТО (масло+фільтри) 🛢️':
+                if (carYear && carYear >= 2010) {
+                    if (mileageDiff >= 15500) return 'critical';
+                    if (mileageDiff >= 14000) return 'warning';
+                    return 'good';
+                } else {
+                    if (mileageDiff >= 10500) return 'critical';
+                    if (mileageDiff >= 9000) return 'warning';
+                    return 'good';
+                }
+            case 'ГРМ (ролики+ремінь) ⚙️': case 'Обвідний ремінь+ролики 🔧':
+                if (mileageDiff >= 60500) return 'critical';
+                if (mileageDiff >= 58000) return 'warning';
+                return 'good';
+            case 'Помпа 💧': case 'Зчеплення ⚙️': case 'Стартер 🔋': case 'Генератор ⚡':
+                if (mileageDiff >= 120000) return 'critical';
+                if (mileageDiff >= 80000) return 'warning';
+                return 'good';
+            case 'Діагностика ходової 🔍':
+                if (monthsDiff > 3) return 'critical';
+                if (monthsDiff >= 2) return 'warning';
+                return 'good';
+            case 'Розвал-сходження 📐': case 'Профілактика супортів 🛠️': case "Комп'ютерна діагностика 💻": case 'Прожиг сажового 🔥':
+                if (monthsDiff > 4) return 'critical';
+                if (monthsDiff >= 2) return 'warning';
+                return 'good';
+            case 'Гальмівні колодки 🛑':
+                if (mileageDiff > 80000) return 'critical';
+                if (mileageDiff >= 60000) return 'warning';
+                return 'good';
+            case 'Гальмівні диски 💿': case 'Амортизатори 🔧':
+                if (mileageDiff > 100000) return 'critical';
+                if (mileageDiff >= 70000) return 'warning';
+                return 'good';
+            case 'Опора амортизаторів 🛠️': case 'Шарова опора ⚪': case 'Рульова тяга 🔗': case 'Рульовий накінечник 🔩':
+                if (mileageDiff > 60000) return 'critical';
+                if (mileageDiff >= 50000) return 'warning';
+                return 'good';
+            case 'Акумулятор 🔋':
+                const yearsDiff = daysDiff / 365;
+                if (yearsDiff > 4) return 'critical';
+                if (yearsDiff >= 3) return 'warning';
+                return 'good';
+            default:
+                if (mileageDiff > 50000) return 'critical';
+                if (mileageDiff > 30000) return 'warning';
+                return 'good';
+        }
+    }
+    
+    // Керування станом
+    setState(newState) {
+        this.state = { ...this.state, ...newState };
+        this.render();
+    }
+    
+    debouncedSearch(term) {
+        clearTimeout(this.searchTimeout);
+        this.searchTimeout = setTimeout(() => {
+            this.setState({ searchTerm: term });
+        }, 300);
+    }
+    
+    debouncedHistorySearch(term) {
+        clearTimeout(this.historySearchTimeout);
+        this.historySearchTimeout = setTimeout(() => {
+            this.setState({ historySearchTerm: term });
+        }, 300);
+    }
+    
+    clearPartFilter() {
+        this.setState({ selectedPartFilter: null });
+    }
+    
+    showPartFilterMenu(event, partName) {
+        event.stopPropagation();
+        
+        const existingMenu = document.getElementById('partFilterMenu');
+        if (existingMenu) existingMenu.remove();
+        
+        const menu = document.createElement('div');
+        menu.id = 'partFilterMenu';
+        menu.className = 'fixed bg-white shadow-2xl rounded-lg border border-blue-400 p-3 z-50 min-w-[180px]';
+        menu.style.top = (event.clientY + 10) + 'px';
+        menu.style.left = (event.clientX - 90) + 'px';
+        menu.style.position = 'fixed';
+        
+        menu.innerHTML = `
+            <div class="text-sm font-bold text-gray-800 mb-2 pb-2 border-b">Фільтр: ${partName.split(' ')[0]}</div>
+            <div class="space-y-1">
+                <div class="px-3 py-2 hover:bg-blue-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
+                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'all' } });">
+                    📋 <span>Всі записи</span>
+                </div>
+                <div class="px-3 py-2 hover:bg-green-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
+                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'good' } });">
+                    ✅ <span>У нормі</span>
+                </div>
+                <div class="px-3 py-2 hover:bg-orange-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
+                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'warning' } });">
+                    ⚠️ <span>Увага</span>
+                </div>
+                <div class="px-3 py-2 hover:bg-red-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
+                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'critical' } });">
+                    ⛔ <span>Критично</span>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(menu);
+        
+        setTimeout(() => {
+            const closeMenu = (e) => {
+                if (menu && !menu.contains(e.target)) {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            document.addEventListener('click', closeMenu);
+        }, 10);
+    }
+    
+    async refreshData(force = false) {
+        console.log('🔄 Оновлення даних...');
+        
+        this.showNotification('Оновлення даних...', 'info');
+        
+        try {
+            if (force) {
+                localStorage.removeItem('carAnalyticsData');
+            }
+            
+            await this.fetchDataFromSheets();
+            this.render();
+            
+            this.showNotification('Дані успішно оновлено', 'success');
+            
+        } catch (error) {
+            console.error('❌ Помилка оновлення:', error);
+            this.showNotification('Помилка оновлення даних: ' + error.message, 'error');
+        }
+    }
+    
+    startAutoRefresh() {
+        setInterval(() => {
+            this.refreshData();
+        }, window.CONFIG.REFRESH_INTERVAL * 60 * 1000);
+    }
+    
+    showNotification(message, type = 'info') {
+        const container = document.getElementById('modals-container');
+        const id = 'notification-' + Date.now();
+        
+        const colors = {
+            info: 'bg-blue-500',
+            success: 'bg-green-500',
+            warning: 'bg-orange-500',
+            error: 'bg-red-500'
+        };
+        
+        const notification = document.createElement('div');
+        notification.id = id;
+        notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-4 py-3 rounded-lg shadow-xl z-50 transform transition-transform duration-300 translate-x-full`;
+        notification.innerHTML = `
+            <div class="flex items-center gap-3">
+                <span class="text-lg">${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}</span>
+                <span>${message}</span>
+                <button onclick="document.getElementById('${id}').remove()" class="ml-4 text-white/80 hover:text-white">✕</button>
+            </div>
+        `;
+        
+        container.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.classList.remove('translate-x-full');
+            notification.classList.add('translate-x-0');
+        }, 10);
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.classList.remove('translate-x-0');
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 300);
+            }
+        }, 5000);
+    }
+    
+    showError(message) {
+        const container = document.getElementById('app');
+        container.innerHTML = `
+            <div class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+                <div class="bg-red-500/10 border border-red-500/30 rounded-xl p-6 max-w-md backdrop-blur-sm">
+                    <div class="text-center">
+                        <div class="text-4xl text-red-400 mb-3">❌</div>
+                        <h2 class="text-xl font-bold text-white mb-2">Помилка завантаження</h2>
+                        <div class="text-red-200 text-sm mb-4">${message.substring(0, 200)}</div>
+                        <div class="text-left text-xs text-blue-200 mb-4">
+                            <p class="font-semibold">Можливі причини:</p>
+                            <ul class="mt-1 space-y-1">
+                                <li>• Неправильний API ключ</li>
+                                <li>• Немає доступу до таблиці</li>
+                                <li>• Проблеми з інтернетом</li>
+                                <li>• Неправильні назви аркушів</li>
+                            </ul>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="location.reload()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                                Оновити сторінку
+                            </button>
+                            <button onclick="app.refreshData(true)" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                                Спробувати знову
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 }
 
 // Глобальний об'єкт для доступу з HTML
