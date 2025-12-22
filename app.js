@@ -1,6 +1,6 @@
 /**
  * 🚗 Аналітична панель відстеження запчастин
- * Версія 2.1 - Виправлена версія з коректним відображенням даних
+ * Версія 2.2 - Виправлене форматування чисел
  */
 
 class CarAnalyticsApp {
@@ -28,52 +28,68 @@ class CarAnalyticsApp {
         console.log('🚀 Ініціалізація аналітичної панелі...');
         
         this.updateLoadingProgress(10);
-        
-        // Встановлення обробників подій
         this.setupEventListeners();
-        
         this.updateLoadingProgress(20);
-        
-        // Завантаження даних
         await this.loadData();
-        
         this.updateLoadingProgress(100);
         
-        // Приховування екрану завантаження
         setTimeout(() => {
             document.getElementById('loading-screen').classList.add('hidden');
             document.getElementById('main-interface').classList.remove('hidden');
             this.render();
         }, 500);
         
-        // Автоматичне оновлення
         this.startAutoRefresh();
     }
     
-    setupEventListeners() {
-        // Кнопка оновлення даних
-        document.getElementById('refresh-data')?.addEventListener('click', () => {
-            this.refreshData(true);
-        });
+    // Функція для форматування чисел з пробілами
+    formatNumber(number) {
+        if (number === null || number === undefined || isNaN(number)) {
+            return '-';
+        }
         
-        // Кнопка очищення кешу
-        document.getElementById('clear-cache')?.addEventListener('click', () => {
-            this.clearCache();
-        });
+        // Округлення до цілого числа
+        const roundedNumber = Math.round(number);
+        
+        // Форматування з пробілами тисяч
+        return roundedNumber.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     }
     
-    updateLoadingProgress(percent) {
-        const bar = document.getElementById('loading-bar');
-        if (bar) {
-            bar.style.width = `${percent}%`;
+    // Функція для форматування пробігу (з "км")
+    formatMileage(mileage) {
+        if (mileage === null || mileage === undefined || isNaN(mileage)) {
+            return '- км';
         }
+        
+        const formatted = this.formatNumber(mileage);
+        return `${formatted} км`;
+    }
+    
+    // Функція для форматування різниці пробігу
+    formatMileageDiff(mileageDiff) {
+        if (mileageDiff === null || mileageDiff === undefined || isNaN(mileageDiff)) {
+            return '- км';
+        }
+        
+        const formatted = this.formatNumber(mileageDiff);
+        return `${formatted} км`;
+    }
+    
+    // Функція для форматування цін
+    formatPrice(price) {
+        if (price === null || price === undefined || isNaN(price) || price === 0) {
+            return '';
+        }
+        
+        // Округлення до 2 знаків після коми для цін
+        const roundedPrice = Math.round(price * 100) / 100;
+        return roundedPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     }
     
     async loadData() {
         console.log('📥 Завантаження даних...');
         
         try {
-            // Спроба завантажити з кешу
             const cached = this.getCachedData();
             if (cached) {
                 console.log('✅ Використано кешовані дані');
@@ -82,7 +98,6 @@ class CarAnalyticsApp {
                 return;
             }
             
-            // Завантаження з Google Sheets API
             await this.fetchDataFromSheets();
             
         } catch (error) {
@@ -97,7 +112,6 @@ class CarAnalyticsApp {
         
         console.log('📋 Завантаження даних з Google Sheets...');
         
-        // Отримання даних з обох аркушів
         const [scheduleData, historyData] = await Promise.all([
             this.fetchSheetData(SPREADSHEET_ID, SHEETS.SCHEDULE, API_KEY),
             this.fetchSheetData(SPREADSHEET_ID, SHEETS.HISTORY, API_KEY)
@@ -108,12 +122,8 @@ class CarAnalyticsApp {
             historyRows: historyData?.length || 0
         });
         
-        // Обробка даних
         this.processData(scheduleData, historyData);
-        
-        // Кешування даних
         this.cacheData(this.appData);
-        
         console.log('✅ Дані успішно оброблено');
         this.updateCacheInfo();
     }
@@ -121,7 +131,6 @@ class CarAnalyticsApp {
     async fetchSheetData(spreadsheetId, sheetName, apiKey) {
         try {
             const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}?key=${apiKey}`;
-            
             console.log(`📥 Запит до: ${sheetName}`);
             
             const response = await fetch(url);
@@ -144,18 +153,13 @@ class CarAnalyticsApp {
             throw new Error('Немає даних для обробки');
         }
         
-        // Обробка графіку обслуговування
         const carsInfo = {};
         const carCities = {};
         
-        // СТОП: Додамо логування для перевірки структури даних
-        console.log('Перші 3 рядки графіку:', scheduleData.slice(0, 3));
-        console.log('Колонки графіку:', scheduleData[0]);
-        
+        // Обробка графіку обслуговування
         for (let i = 1; i < scheduleData.length; i++) {
             const row = scheduleData[i];
             
-            // Перевірка, чи рядок має достатньо колонок
             if (row.length < 5) {
                 console.warn(`Рядок ${i} має недостатньо колонок:`, row);
                 continue;
@@ -176,21 +180,16 @@ class CarAnalyticsApp {
         }
         
         const allowedCars = Object.keys(carsInfo);
-        console.log(`🚗 Знайдено ${allowedCars.length} автомобілів:`, allowedCars);
+        console.log(`🚗 Знайдено ${allowedCars.length} автомобілів`);
         
         // Обробка історичних даних
         const records = [];
         const currentMileages = {};
         const allowedCarsSet = new Set(allowedCars);
         
-        // СТОП: Додамо логування для перевірки історії
-        console.log('Перші 3 рядки історії:', historyData.slice(0, 3));
-        console.log('Колонки історії:', historyData[0]);
-        
         for (let i = 1; i < historyData.length; i++) {
             const row = historyData[i];
             
-            // Перевірка, чи рядок має достатньо колонок
             if (row.length < 8) {
                 console.warn(`Рядок історії ${i} має недостатньо колонок:`, row);
                 continue;
@@ -205,10 +204,8 @@ class CarAnalyticsApp {
             const mileage = parseFloat(row[CONSTANTS.COL_MILEAGE]) || 0;
             if (mileage === 0) continue;
             
-            // Обробка дати
             let date = row[CONSTANTS.COL_DATE];
             if (date) {
-                // Спробуємо розпарсити різні формати дат
                 const dateObj = this.parseDate(date);
                 if (dateObj) {
                     date = dateObj.toISOString().split('T')[0];
@@ -233,22 +230,12 @@ class CarAnalyticsApp {
                 status: row.length > CONSTANTS.COL_STATUS ? String(row[CONSTANTS.COL_STATUS] || '').trim() : ''
             });
             
-            // Оновлення максимального пробігу
             if (mileage > (currentMileages[car] || 0)) {
                 currentMileages[car] = mileage;
             }
         }
         
         console.log(`📊 Оброблено ${records.length} записів історії`);
-        
-        // Перевірка, чи є дані для відображення
-        if (allowedCars.length === 0) {
-            console.warn('⚠️ Немає автомобілів в графіку обслуговування');
-        }
-        
-        if (records.length === 0) {
-            console.warn('⚠️ Немає записів в історії');
-        }
         
         this.appData = {
             records: records,
@@ -265,114 +252,7 @@ class CarAnalyticsApp {
             }
         };
         
-        // Оновлення лічильника авто
         document.getElementById('cars-count').textContent = allowedCars.length;
-    }
-    
-    parseDate(dateString) {
-        if (!dateString) return null;
-        
-        // Спробуємо різні формати
-        const formats = [
-            // ISO формат
-            () => new Date(dateString),
-            // ДД.ММ.РРРР
-            () => {
-                const parts = dateString.split('.');
-                if (parts.length === 3) {
-                    return new Date(parts[2], parts[1] - 1, parts[0]);
-                }
-                return null;
-            },
-            // РРРР-ММ-ДД
-            () => {
-                const parts = dateString.split('-');
-                if (parts.length === 3) {
-                    return new Date(parts[0], parts[1] - 1, parts[2]);
-                }
-                return null;
-            }
-        ];
-        
-        for (const format of formats) {
-            try {
-                const date = format();
-                if (date && !isNaN(date.getTime())) {
-                    return date;
-                }
-            } catch (e) {
-                // Продовжуємо спроби
-            }
-        }
-        
-        return null;
-    }
-    
-    // Функції кешування
-    getCachedData() {
-        try {
-            const cached = localStorage.getItem('carAnalyticsData');
-            if (!cached) return null;
-            
-            const data = JSON.parse(cached);
-            
-            // Перевірка актуальності
-            const cacheTime = new Date(data.lastUpdated).getTime();
-            const currentTime = Date.now();
-            const cacheAge = currentTime - cacheTime;
-            const maxAge = 5 * 60 * 1000; // 5 хвилин
-            
-            if (cacheAge > maxAge) {
-                console.log(`⚠️ Кеш застарів (${Math.floor(cacheAge / 1000 / 60)} хв)`);
-                return null;
-            }
-            
-            return data;
-        } catch (error) {
-            console.warn('⚠️ Помилка читання кешу:', error);
-            return null;
-        }
-    }
-    
-    cacheData(data) {
-        try {
-            const dataString = JSON.stringify(data);
-            localStorage.setItem('carAnalyticsData', dataString);
-            localStorage.setItem('carAnalyticsCacheTime', new Date().toISOString());
-            
-            console.log('💾 Дані збережено в кеш');
-        } catch (error) {
-            console.warn('⚠️ Помилка збереження кешу:', error);
-        }
-    }
-    
-    clearCache() {
-        try {
-            localStorage.removeItem('carAnalyticsData');
-            localStorage.removeItem('carAnalyticsCacheTime');
-            
-            console.log('🗑️ Кеш очищено');
-            this.showNotification('Кеш успішно очищено', 'success');
-            this.updateCacheInfo();
-        } catch (error) {
-            console.error('❌ Помилка очищення кешу:', error);
-            this.showNotification('Помилка очищення кешу', 'error');
-        }
-    }
-    
-    updateCacheInfo() {
-        try {
-            const cacheTime = localStorage.getItem('carAnalyticsCacheTime');
-            if (cacheTime) {
-                const time = new Date(cacheTime);
-                const now = new Date();
-                const diffMinutes = Math.floor((now - time) / (1000 * 60));
-                
-                console.log(`⏰ Кеш оновлено ${diffMinutes} хвилин тому`);
-            }
-        } catch (error) {
-            // Ігноруємо помилки
-        }
     }
     
     // Основний рендеринг
@@ -382,7 +262,6 @@ class CarAnalyticsApp {
             return;
         }
         
-        // Перевірка, чи є дані
         if (this.appData._meta.totalCars === 0) {
             this.renderNoData();
             return;
@@ -393,34 +272,6 @@ class CarAnalyticsApp {
         } else {
             this.renderCarList();
         }
-    }
-    
-    renderNoData() {
-        const html = `
-            <div class="min-h-screen flex flex-col items-center justify-center p-4">
-                <div class="text-center max-w-md">
-                    <div class="text-4xl mb-4">🚫</div>
-                    <h1 class="text-2xl font-bold text-white mb-2">Немає даних</h1>
-                    <p class="text-blue-200 text-sm mb-6">Не знайдено автомобілів для відображення</p>
-                    <div class="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
-                        <div class="text-white text-sm mb-3">
-                            Можливі причини:
-                            <ul class="text-left mt-2 text-blue-200">
-                                <li>• Аркуш "ГРАФІК ОБСЛУГОВУВАННЯ" порожній</li>
-                                <li>• Неправильні назви аркушів</li>
-                                <li>• Проблеми з API ключем</li>
-                            </ul>
-                        </div>
-                        <button onclick="app.refreshData(true)" 
-                                class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors w-full">
-                            🔄 Спробувати знову
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        document.getElementById('main-interface').innerHTML = html;
     }
     
     renderCarList() {
@@ -445,186 +296,6 @@ class CarAnalyticsApp {
         
         const html = this.generateCarDetailHTML(car);
         document.getElementById('main-interface').innerHTML = html;
-    }
-    
-    // Допоміжні функції
-    processCarData() {
-        if (!this.appData) return [];
-        
-        const { records, carsInfo, currentMileages, partKeywords, partsOrder, currentDate } = this.appData;
-        const cars = {};
-        
-        console.log('🔍 Обробка даних для відображення...');
-        console.log('Кількість записів:', records.length);
-        console.log('Кількість автомобілів:', Object.keys(carsInfo).length);
-        
-        // Обробка кожної машини
-        for (const license in carsInfo) {
-            const carInfo = carsInfo[license];
-            const currentMileage = currentMileages[license] || 0;
-            
-            cars[license] = {
-                city: carInfo.city,
-                car: license,
-                license: license,
-                model: carInfo.model,
-                year: carInfo.year,
-                currentMileage: currentMileage,
-                parts: {},
-                history: []
-            };
-            
-            // Ініціалізація частин
-            partsOrder.forEach(partName => {
-                cars[license].parts[partName] = null;
-            });
-        }
-        
-        // Обробка історії
-        records.forEach(record => {
-            const car = cars[record.car];
-            if (!car) return;
-            
-            // Додавання запису в історію
-            car.history.push(record);
-            
-            // Визначення частин з ключових слів
-            for (const partName in partKeywords) {
-                if (this.matchesKeywords(record.description, partKeywords[partName])) {
-                    const existingPart = car.parts[partName];
-                    
-                    if (!existingPart || record.mileage > existingPart.mileage) {
-                        const mileageDiff = car.currentMileage - record.mileage;
-                        const daysDiff = Math.floor((new Date(currentDate) - new Date(record.date)) / (1000 * 60 * 60 * 24));
-                        const carYear = parseInt(car.year) || 0;
-                        const carModel = car.model || '';
-                        
-                        const years = Math.floor(daysDiff / 365);
-                        const months = Math.floor((daysDiff % 365) / 30);
-                        let timeDiff = '';
-                        
-                        if (years > 0) timeDiff += years + 'р ';
-                        if (months > 0) timeDiff += months + 'міс';
-                        if (!timeDiff) timeDiff = daysDiff + 'дн';
-                        
-                        car.parts[partName] = {
-                            date: record.date,
-                            mileage: record.mileage,
-                            currentMileage: car.currentMileage,
-                            mileageDiff: mileageDiff,
-                            timeDiff: timeDiff,
-                            daysDiff: daysDiff,
-                            status: this.getPartStatus(partName, mileageDiff, daysDiff, carYear, carModel)
-                        };
-                    }
-                }
-            }
-        });
-        
-        // Сортування
-        const sortedCars = Object.values(cars);
-        sortedCars.sort((a, b) => {
-            const cityCompare = (a.city || '').localeCompare(b.city || '', 'uk');
-            return cityCompare !== 0 ? cityCompare : (a.license || '').localeCompare(b.license || '', 'uk');
-        });
-        
-        // Сортування історії
-        sortedCars.forEach(car => {
-            car.history.sort((a, b) => new Date(b.date) - new Date(a.date));
-        });
-        
-        console.log('✅ Оброблено автомобілів:', sortedCars.length);
-        
-        // Додамо логування для перевірки
-        if (sortedCars.length > 0) {
-            const sampleCar = sortedCars[0];
-            console.log('Приклад автомобіля:', {
-                license: sampleCar.license,
-                partsCount: Object.keys(sampleCar.parts).length,
-                hasPartsData: Object.values(sampleCar.parts).filter(p => p !== null).length
-            });
-        }
-        
-        return sortedCars;
-    }
-    
-    filterCars(cars) {
-        const { searchTerm, selectedCity, selectedStatus, selectedPartFilter } = this.state;
-        const term = searchTerm.toLowerCase();
-        const isAllCities = selectedCity === 'Всі міста';
-        
-        return cars.filter(car => {
-            // Пошук за текстом
-            if (term && !(
-                (car.car && car.car.toLowerCase().includes(term)) ||
-                (car.city && car.city.toLowerCase().includes(term)) ||
-                (car.model && car.model.toLowerCase().includes(term)) ||
-                (car.license && car.license.toLowerCase().includes(term))
-            )) return false;
-            
-            // Фільтр за містом
-            if (!isAllCities && car.city !== selectedCity) return false;
-            
-            // Фільтр за статусом
-            if (selectedStatus !== 'all') {
-                let hasStatus = false;
-                for (const partName in car.parts) {
-                    const part = car.parts[partName];
-                    if (part && part.status === selectedStatus) {
-                        hasStatus = true;
-                        break;
-                    }
-                }
-                if (!hasStatus) return false;
-            }
-            
-            // Фільтр за частиною
-            if (selectedPartFilter) {
-                const part = car.parts[selectedPartFilter.partName];
-                if (selectedPartFilter.status === 'all') {
-                    if (!part) return false;
-                } else if (!part || part.status !== selectedPartFilter.status) {
-                    return false;
-                }
-            }
-            
-            return true;
-        });
-    }
-    
-    getCities(cars) {
-        const cities = new Set(['Всі міста']);
-        cars.forEach(car => {
-            if (car.city) cities.add(car.city);
-        });
-        return Array.from(cities).sort((a, b) => a.localeCompare(b, 'uk'));
-    }
-    
-    calculateStats(cars) {
-        let totalCars = 0;
-        let carsWithGood = 0;
-        let carsWithWarning = 0;
-        let carsWithCritical = 0;
-        
-        cars.forEach(car => {
-            totalCars++;
-            let hasGood = false, hasWarning = false, hasCritical = false;
-            
-            for (const partName in car.parts) {
-                const part = car.parts[partName];
-                if (part) {
-                    if (part.status === 'good') hasGood = true;
-                    if (part.status === 'warning') hasWarning = true;
-                    if (part.status === 'critical') hasCritical = true;
-                }
-            }
-            
-            if (hasGood) carsWithGood++;
-            if (hasWarning) carsWithWarning++;
-            if (hasCritical) carsWithCritical++;
-        });
-        
-        return { totalCars, carsWithGood, carsWithWarning, carsWithCritical };
     }
     
     // Генерація HTML
@@ -677,6 +348,654 @@ class CarAnalyticsApp {
                 </div>
             </div>
         `;
+    }
+    
+    generateCarsTable(cars, importantParts) {
+        if (cars.length === 0) {
+            return `
+                <div class="px-4 py-12 text-center">
+                    <div class="text-gray-400 text-lg mb-2">🚫</div>
+                    <div class="text-gray-600 font-medium">Автомобілів не знайдено</div>
+                    <div class="text-gray-400 text-sm mt-1">Спробуйте змінити параметри пошуку</div>
+                </div>
+            `;
+        }
+        
+        const tableHeaders = this.generateTableHeaders(importantParts);
+        const tableRows = cars.map((car, idx) => this.generateCarRow(car, idx, importantParts)).join('');
+        
+        return `
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[1000px]">
+                    <thead class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-bold uppercase">Статус</th>
+                            <th class="px-3 py-3 text-left text-xs font-bold uppercase">Номер</th>
+                            <th class="px-3 py-3 text-left text-xs font-bold uppercase mobile-hidden">Модель</th>
+                            <th class="px-3 py-3 text-left text-xs font-bold uppercase mobile-hidden">Рік</th>
+                            <th class="px-3 py-3 text-left text-xs font-bold uppercase">Місто</th>
+                            <th class="px-3 py-3 text-left text-xs font-bold uppercase">Пробіг</th>
+                            ${tableHeaders}
+                            <th class="px-3 py-3 text-center text-xs font-bold uppercase mobile-hidden">✅</th>
+                            <th class="px-3 py-3 text-center text-xs font-bold uppercase mobile-hidden">⚠️</th>
+                            <th class="px-3 py-3 text-center text-xs font-bold uppercase mobile-hidden">⛔</th>
+                            <th class="px-3 py-3 text-center text-xs font-bold uppercase">📋</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        ${tableRows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    generateCarRow(car, idx, importantParts) {
+        const parts = Object.values(car.parts).filter(p => p !== null);
+        const criticalCount = parts.filter(p => p.status === 'critical').length;
+        const warningCount = parts.filter(p => p.status === 'warning').length;
+        const goodCount = parts.filter(p => p.status === 'good').length;
+        
+        const statusColor = criticalCount > 0 ? 'bg-red-500' : warningCount > 0 ? 'bg-orange-500' : 'bg-green-500';
+        const rowBg = idx % 2 === 0 ? 'bg-gray-50' : 'bg-white';
+        
+        const partCells = importantParts.map(partName => {
+            const part = car.parts[partName];
+            const isMonths = partName.includes('Діагностика') || partName.includes('Розвал') || partName.includes('Профілактика');
+            const display = this.getPartDisplay(part, isMonths);
+            return `<td class="px-2 py-3 text-center"><div class="${display.bg} ${display.color} font-semibold text-xs py-1 px-2 rounded whitespace-nowrap overflow-hidden text-ellipsis max-w-[80px]">${display.text}</div></td>`;
+        }).join('');
+        
+        return `
+            <tr class="${rowBg} hover:bg-blue-50 cursor-pointer transition-colors" 
+                onclick="app.setState({ selectedCar: '${car.car}' }); app.render();">
+                <td class="px-3 py-3"><div class="${statusColor} w-3 h-3 rounded-full"></div></td>
+                <td class="px-3 py-3">
+                    <div class="font-bold text-gray-800 whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]" 
+                         title="${car.license}">${car.license}</div>
+                </td>
+                <td class="px-3 py-3 mobile-hidden">
+                    <div class="text-gray-700 text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]" 
+                         title="${car.model}">${car.model}</div>
+                </td>
+                <td class="px-3 py-3 mobile-hidden">
+                    <div class="text-gray-600 text-sm whitespace-nowrap">${car.year || '-'}</div>
+                </td>
+                <td class="px-3 py-3">
+                    <div class="text-gray-600 text-sm whitespace-nowrap flex items-center gap-1">
+                        <span>📍</span>
+                        <span>${car.city || '-'}</span>
+                    </div>
+                </td>
+                <td class="px-3 py-3">
+                    <div class="font-semibold text-gray-800 whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+                        ${this.formatMileage(car.currentMileage)}
+                    </div>
+                </td>
+                ${partCells}
+                <td class="px-3 py-3 text-center mobile-hidden">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-700 font-bold text-sm">
+                        ${goodCount}
+                    </span>
+                </td>
+                <td class="px-3 py-3 text-center mobile-hidden">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 text-orange-700 font-bold text-sm">
+                        ${warningCount}
+                    </span>
+                </td>
+                <td class="px-3 py-3 text-center mobile-hidden">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-red-700 font-bold text-sm">
+                        ${criticalCount}
+                    </span>
+                </td>
+                <td class="px-3 py-3 text-center">
+                    <div class="text-blue-600 font-semibold text-sm whitespace-nowrap">
+                        ${car.history.length}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+    
+    getPartDisplay(part, isMonths = false) {
+        if (!part) return { color: 'text-gray-400', text: '-', bg: 'bg-gray-100' };
+        
+        let color = 'text-green-600', bg = 'bg-green-100';
+        if (part.status === 'warning') { color = 'text-orange-600'; bg = 'bg-orange-100'; }
+        else if (part.status === 'critical') { color = 'text-red-600'; bg = 'bg-red-100'; }
+        
+        // ФОРМАТУВАННЯ З ПРОБІЛАМИ ДЛЯ КІЛОМЕТРАЖУ
+        const text = isMonths ? 
+            Math.floor(part.daysDiff / 30) + 'міс' : 
+            this.formatMileageDiff(part.mileageDiff);
+            
+        return { color, text, bg };
+    }
+    
+    // Детальний перегляд автомобіля
+    generateCarDetailHTML(car) {
+        const { selectedHistoryPartFilter, historySearchTerm } = this.state;
+        const displayHistory = this.filterCarHistory(car.history, selectedHistoryPartFilter, historySearchTerm);
+        const partNames = CONSTANTS.PARTS_ORDER;
+        
+        return `
+            <div class="min-h-screen">
+                <div class="mb-4 sm:mb-6">
+                    <button onclick="app.setState({ selectedCar: null, selectedHistoryPartFilter: null, historySearchTerm: '' });" 
+                            class="bg-white hover:bg-gray-100 text-blue-600 font-semibold px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 mb-3">
+                        ← Назад до списку
+                    </button>
+                    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-2xl p-4">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <div class="bg-white/20 p-3 rounded-xl text-3xl">🚗</div>
+                                <div>
+                                    <div class="text-white text-xl font-bold">${car.license}</div>
+                                    <div class="text-blue-100 text-base">${car.model || 'Немає моделі'}</div>
+                                    <div class="text-blue-200 text-xs mt-1">
+                                        ${car.year ? car.year + ' рік' : ''} 
+                                        ${car.year && car.city ? ' • ' : ''}
+                                        ${car.city || ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-left sm:text-right">
+                                <div class="text-blue-100 text-xs">Поточний пробіг</div>
+                                <div class="text-white text-xl font-bold">${this.formatMileage(car.currentMileage)}</div>
+                                <div class="text-blue-200 text-xs mt-1">📋 ${car.history.length} записів в історії</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="max-w-[1400px] mx-auto p-4">
+                    <!-- Стан запчастин -->
+                    <div class="bg-white rounded-xl shadow-xl p-3 mb-4">
+                        ${this.generateCarPartsHTML(car, partNames)}
+                    </div>
+                    
+                    <!-- Історія обслуговування -->
+                    <div class="bg-white rounded-xl shadow-xl p-3">
+                        ${this.generateCarHistoryHTML(car, displayHistory)}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    generateCarPartsHTML(car, partNames) {
+        const importantParts = partNames.slice(0, 8);
+        const otherParts = partNames.slice(8);
+        
+        return `
+            <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <span>🔧</span> Стан запчастин
+                ${this.state.selectedHistoryPartFilter || this.state.historySearchTerm ? `
+                    <button onclick="app.setState({ selectedHistoryPartFilter: null, historySearchTerm: '' });" 
+                            class="ml-auto bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold transition-colors">
+                        ✕ Скинути всі фільтри
+                    </button>
+                ` : ''}
+            </h3>
+            
+            <div class="mb-4">
+                <h4 class="text-base font-semibold text-blue-600 mb-2">⚡ Важливі категорії</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    ${importantParts.map(partName => this.generatePartCard(car, partName)).join('')}
+                </div>
+            </div>
+            
+            <div>
+                <h4 class="text-base font-semibold text-gray-600 mb-2">🔩 Інші запчастини</h4>
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    ${otherParts.map(partName => this.generatePartCard(car, partName, true)).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    generatePartCard(car, partName, small = false) {
+        const part = car.parts[partName];
+        const isActive = this.state.selectedHistoryPartFilter === partName;
+        
+        let borderClass = !part ? 'border-gray-200' : 
+                         part.status === 'critical' ? 'border-red-300' : 
+                         part.status === 'warning' ? 'border-orange-300' : 'border-green-300';
+        
+        let bgClass = !part ? 'bg-gray-50' : 
+                     part.status === 'critical' ? 'bg-red-50' : 
+                     part.status === 'warning' ? 'bg-orange-50' : 'bg-green-50';
+        
+        let textClass = !part ? 'text-gray-400' : 
+                       part.status === 'critical' ? 'text-red-600' : 
+                       part.status === 'warning' ? 'text-orange-600' : 'text-green-600';
+        
+        const activeClass = isActive ? 'border-2 border-blue-500 ring-2 ring-blue-200' : '';
+        const formattedDate = part ? this.formatDate(part.date) : '';
+        
+        const cardClass = small ? 'p-2 rounded border' : 'p-3 rounded-lg border';
+        const textSize = small ? 'text-xs' : 'text-sm';
+        
+        return `
+            <div class="${cardClass} ${borderClass} ${bgClass} cursor-pointer hover:shadow transition-all ${activeClass}" 
+                 onclick="app.setState({ selectedHistoryPartFilter: app.state.selectedHistoryPartFilter === '${partName}' ? null : '${partName}' });">
+                <div class="font-bold text-gray-800 ${textSize} mb-1 flex items-center justify-between">
+                    <span class="truncate" title="${partName}">${partName}</span>
+                    ${isActive ? '<span class="text-blue-500 text-xs flex-shrink-0 ml-1">🔍</span>' : ''}
+                </div>
+                ${part ? `
+                    <div class="${small ? 'space-y-0.5' : 'space-y-1'}">
+                        <div class="flex justify-between items-center">
+                            <div class="text-xs text-gray-500">Дата:</div>
+                            <div class="font-semibold text-gray-800 text-xs">${formattedDate}</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="${small ? 'text-sm' : 'text-lg'} font-bold ${textClass}">
+                                <!-- ВИКОРИСТАННЯ ФОРМАТУВАННЯ З ПРОБІЛАМИ -->
+                                ${this.formatMileageDiff(part.mileageDiff)}
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div class="text-xs text-gray-500">Час:</div>
+                            <div class="text-xs text-gray-600">${part.timeDiff}</div>
+                        </div>
+                    </div>
+                ` : '<div class="text-gray-300 text-xs text-center py-2">Немає даних</div>'}
+            </div>
+        `;
+    }
+    
+    generateHistoryRecordHTML(record) {
+        const formattedDate = this.formatDate(record.date);
+        
+        // ФОРМАТУВАННЯ ЧИСЕЛ З ПРОБІЛАМИ
+        const formattedMileage = this.formatMileage(record.mileage);
+        const formattedQuantity = record.quantity ? this.formatNumber(record.quantity) : '';
+        const formattedPrice = record.price ? this.formatPrice(record.price) + ' ₴' : '';
+        const formattedTotal = record.totalWithVAT ? this.formatPrice(record.totalWithVAT) + ' ₴' : '';
+        
+        // Визначення стилю статусу
+        let statusClass = 'bg-gray-100 text-gray-600';
+        let statusIcon = '📄';
+        if (record.status) {
+            const statusLower = record.status.toLowerCase();
+            if (statusLower.includes('виконано') || statusLower.includes('готово') || statusLower.includes('підтверджено')) {
+                statusClass = 'bg-green-100 text-green-700';
+                statusIcon = '✅';
+            } else if (statusLower.includes('очікує') || statusLower.includes('в обробці') || statusLower.includes('замовлено')) {
+                statusClass = 'bg-blue-100 text-blue-700';
+                statusIcon = '⏳';
+            } else if (statusLower.includes('відмов') || statusLower.includes('скасовано') || statusLower.includes('недоступно')) {
+                statusClass = 'bg-red-100 text-red-700';
+                statusIcon = '❌';
+            }
+        }
+        
+        const unitDisplay = record.unit ? record.unit : (record.quantity > 0 ? 'шт.' : '');
+        
+        return `
+            <div class="bg-gray-50 hover:bg-gray-100 rounded-lg p-4 border border-gray-200 transition-all hover:shadow-sm">
+                <!-- ДАТА ТА ПРОБІГ -->
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">📅</span>
+                        <span class="font-bold text-gray-800 text-sm">${formattedDate}</span>
+                    </div>
+                    <div class="flex items-center gap-2 bg-orange-50 px-3 py-1 rounded-full">
+                        <span class="text-sm">🛣️</span>
+                        <span class="font-bold text-orange-700 text-sm">${formattedMileage}</span>
+                    </div>
+                </div>
+                
+                <!-- ОПИС ТА ДЕТАЛІ -->
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                    <div class="text-gray-700 text-sm flex-1">
+                        ${record.description}
+                        ${record.partCode || record.unit || record.quantity > 0 || record.price > 0 ? `
+                            <div class="mt-2 flex flex-wrap gap-2 items-center">
+                                ${record.partCode ? `
+                                    <span class="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs">
+                                        <span>🔩</span>
+                                        <span class="font-medium">Код: ${record.partCode}</span>
+                                    </span>
+                                ` : ''}
+                                ${unitDisplay ? `
+                                    <span class="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs">
+                                        <span>📦</span>
+                                        <span>Од.: ${unitDisplay}</span>
+                                    </span>
+                                ` : ''}
+                                ${formattedQuantity ? `
+                                    <span class="inline-flex items-center gap-1 bg-blue-50 px-2 py-1 rounded text-xs">
+                                        <span>🔢</span>
+                                        <span>Кільк.: ${formattedQuantity}</span>
+                                    </span>
+                                ` : ''}
+                                ${formattedPrice ? `
+                                    <span class="inline-flex items-center gap-1 bg-blue-100 px-2 py-1 rounded text-xs">
+                                        <span>💰</span>
+                                        <span class="font-semibold">Ціна: ${formattedPrice}</span>
+                                    </span>
+                                ` : ''}
+                                ${formattedTotal ? `
+                                    <span class="inline-flex items-center gap-1 bg-green-100 px-2 py-1 rounded text-xs">
+                                        <span>💵</span>
+                                        <span class="font-bold">Сума: ${formattedTotal}</span>
+                                    </span>
+                                ` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${record.status ? `
+                        <div class="${statusClass} px-3 py-1 rounded text-xs font-medium whitespace-nowrap mt-2 sm:mt-0 self-start">
+                            ${statusIcon} ${record.status}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Інші функції залишаються без змін...
+    setupEventListeners() {
+        document.getElementById('refresh-data')?.addEventListener('click', () => {
+            this.refreshData(true);
+        });
+        
+        document.getElementById('clear-cache')?.addEventListener('click', () => {
+            this.clearCache();
+        });
+    }
+    
+    updateLoadingProgress(percent) {
+        const bar = document.getElementById('loading-bar');
+        if (bar) {
+            bar.style.width = `${percent}%`;
+        }
+    }
+    
+    getCachedData() {
+        try {
+            const cached = localStorage.getItem('carAnalyticsData');
+            if (!cached) return null;
+            
+            const data = JSON.parse(cached);
+            const cacheTime = new Date(data.lastUpdated).getTime();
+            const currentTime = Date.now();
+            const maxAge = 5 * 60 * 1000;
+            
+            if (currentTime - cacheTime > maxAge) {
+                console.log(`⚠️ Кеш застарів (${Math.floor((currentTime - cacheTime) / 1000 / 60)} хв)`);
+                return null;
+            }
+            
+            return data;
+        } catch (error) {
+            console.warn('⚠️ Помилка читання кешу:', error);
+            return null;
+        }
+    }
+    
+    cacheData(data) {
+        try {
+            const dataString = JSON.stringify(data);
+            localStorage.setItem('carAnalyticsData', dataString);
+            localStorage.setItem('carAnalyticsCacheTime', new Date().toISOString());
+            console.log('💾 Дані збережено в кеш');
+        } catch (error) {
+            console.warn('⚠️ Помилка збереження кешу:', error);
+        }
+    }
+    
+    clearCache() {
+        try {
+            localStorage.removeItem('carAnalyticsData');
+            localStorage.removeItem('carAnalyticsCacheTime');
+            console.log('🗑️ Кеш очищено');
+            this.showNotification('Кеш успішно очищено', 'success');
+            this.updateCacheInfo();
+        } catch (error) {
+            console.error('❌ Помилка очищення кешу:', error);
+            this.showNotification('Помилка очищення кешу', 'error');
+        }
+    }
+    
+    updateCacheInfo() {
+        try {
+            const cacheTime = localStorage.getItem('carAnalyticsCacheTime');
+            if (cacheTime) {
+                const time = new Date(cacheTime);
+                const now = new Date();
+                const diffMinutes = Math.floor((now - time) / (1000 * 60));
+                console.log(`⏰ Кеш оновлено ${diffMinutes} хвилин тому`);
+            }
+        } catch (error) {
+            // Ігноруємо помилки
+        }
+    }
+    
+    parseDate(dateString) {
+        if (!dateString) return null;
+        
+        const formats = [
+            () => new Date(dateString),
+            () => {
+                const parts = dateString.split('.');
+                if (parts.length === 3) {
+                    return new Date(parts[2], parts[1] - 1, parts[0]);
+                }
+                return null;
+            },
+            () => {
+                const parts = dateString.split('-');
+                if (parts.length === 3) {
+                    return new Date(parts[0], parts[1] - 1, parts[2]);
+                }
+                return null;
+            }
+        ];
+        
+        for (const format of formats) {
+            try {
+                const date = format();
+                if (date && !isNaN(date.getTime())) {
+                    return date;
+                }
+            } catch (e) {
+                // Продовжуємо спроби
+            }
+        }
+        
+        return null;
+    }
+    
+    renderNoData() {
+        const html = `
+            <div class="min-h-screen flex flex-col items-center justify-center p-4">
+                <div class="text-center max-w-md">
+                    <div class="text-4xl mb-4">🚫</div>
+                    <h1 class="text-2xl font-bold text-white mb-2">Немає даних</h1>
+                    <p class="text-blue-200 text-sm mb-6">Не знайдено автомобілів для відображення</p>
+                    <div class="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                        <div class="text-white text-sm mb-3">
+                            Можливі причини:
+                            <ul class="text-left mt-2 text-blue-200">
+                                <li>• Аркуш "ГРАФІК ОБСЛУГОВУВАННЯ" порожній</li>
+                                <li>• Неправильні назви аркушів</li>
+                                <li>• Проблеми з API ключем</li>
+                            </ul>
+                        </div>
+                        <button onclick="app.refreshData(true)" 
+                                class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors w-full">
+                            🔄 Спробувати знову
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('main-interface').innerHTML = html;
+    }
+    
+    processCarData() {
+        if (!this.appData) return [];
+        
+        const { records, carsInfo, currentMileages, partKeywords, partsOrder, currentDate } = this.appData;
+        const cars = {};
+        
+        // Обробка кожної машини
+        for (const license in carsInfo) {
+            const carInfo = carsInfo[license];
+            const currentMileage = currentMileages[license] || 0;
+            
+            cars[license] = {
+                city: carInfo.city,
+                car: license,
+                license: license,
+                model: carInfo.model,
+                year: carInfo.year,
+                currentMileage: currentMileage,
+                parts: {},
+                history: []
+            };
+            
+            // Ініціалізація частин
+            partsOrder.forEach(partName => {
+                cars[license].parts[partName] = null;
+            });
+        }
+        
+        // Обробка історії
+        records.forEach(record => {
+            const car = cars[record.car];
+            if (!car) return;
+            
+            car.history.push(record);
+            
+            // Визначення частин з ключових слів
+            for (const partName in partKeywords) {
+                if (this.matchesKeywords(record.description, partKeywords[partName])) {
+                    const existingPart = car.parts[partName];
+                    
+                    if (!existingPart || record.mileage > existingPart.mileage) {
+                        const mileageDiff = car.currentMileage - record.mileage;
+                        const daysDiff = Math.floor((new Date(currentDate) - new Date(record.date)) / (1000 * 60 * 60 * 24));
+                        const carYear = parseInt(car.year) || 0;
+                        const carModel = car.model || '';
+                        
+                        const years = Math.floor(daysDiff / 365);
+                        const months = Math.floor((daysDiff % 365) / 30);
+                        let timeDiff = '';
+                        
+                        if (years > 0) timeDiff += years + 'р ';
+                        if (months > 0) timeDiff += months + 'міс';
+                        if (!timeDiff) timeDiff = daysDiff + 'дн';
+                        
+                        car.parts[partName] = {
+                            date: record.date,
+                            mileage: record.mileage,
+                            currentMileage: car.currentMileage,
+                            mileageDiff: mileageDiff,
+                            timeDiff: timeDiff,
+                            daysDiff: daysDiff,
+                            status: this.getPartStatus(partName, mileageDiff, daysDiff, carYear, carModel)
+                        };
+                    }
+                }
+            }
+        });
+        
+        // Сортування
+        const sortedCars = Object.values(cars);
+        sortedCars.sort((a, b) => {
+            const cityCompare = (a.city || '').localeCompare(b.city || '', 'uk');
+            return cityCompare !== 0 ? cityCompare : (a.license || '').localeCompare(b.license || '', 'uk');
+        });
+        
+        // Сортування історії
+        sortedCars.forEach(car => {
+            car.history.sort((a, b) => new Date(b.date) - new Date(a.date));
+        });
+        
+        console.log('✅ Оброблено автомобілів:', sortedCars.length);
+        
+        return sortedCars;
+    }
+    
+    filterCars(cars) {
+        const { searchTerm, selectedCity, selectedStatus, selectedPartFilter } = this.state;
+        const term = searchTerm.toLowerCase();
+        const isAllCities = selectedCity === 'Всі міста';
+        
+        return cars.filter(car => {
+            if (term && !(
+                (car.car && car.car.toLowerCase().includes(term)) ||
+                (car.city && car.city.toLowerCase().includes(term)) ||
+                (car.model && car.model.toLowerCase().includes(term)) ||
+                (car.license && car.license.toLowerCase().includes(term))
+            )) return false;
+            
+            if (!isAllCities && car.city !== selectedCity) return false;
+            
+            if (selectedStatus !== 'all') {
+                let hasStatus = false;
+                for (const partName in car.parts) {
+                    const part = car.parts[partName];
+                    if (part && part.status === selectedStatus) {
+                        hasStatus = true;
+                        break;
+                    }
+                }
+                if (!hasStatus) return false;
+            }
+            
+            if (selectedPartFilter) {
+                const part = car.parts[selectedPartFilter.partName];
+                if (selectedPartFilter.status === 'all') {
+                    if (!part) return false;
+                } else if (!part || part.status !== selectedPartFilter.status) {
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+    }
+    
+    getCities(cars) {
+        const cities = new Set(['Всі міста']);
+        cars.forEach(car => {
+            if (car.city) cities.add(car.city);
+        });
+        return Array.from(cities).sort((a, b) => a.localeCompare(b, 'uk'));
+    }
+    
+    calculateStats(cars) {
+        let totalCars = 0;
+        let carsWithGood = 0;
+        let carsWithWarning = 0;
+        let carsWithCritical = 0;
+        
+        cars.forEach(car => {
+            totalCars++;
+            let hasGood = false, hasWarning = false, hasCritical = false;
+            
+            for (const partName in car.parts) {
+                const part = car.parts[partName];
+                if (part) {
+                    if (part.status === 'good') hasGood = true;
+                    if (part.status === 'warning') hasWarning = true;
+                    if (part.status === 'critical') hasCritical = true;
+                }
+            }
+            
+            if (hasGood) carsWithGood++;
+            if (hasWarning) carsWithWarning++;
+            if (hasCritical) carsWithCritical++;
+        });
+        
+        return { totalCars, carsWithGood, carsWithWarning, carsWithCritical };
     }
     
     generateStatsCards(stats) {
@@ -754,46 +1073,6 @@ class CarAnalyticsApp {
         `;
     }
     
-    generateCarsTable(cars, importantParts) {
-        if (cars.length === 0) {
-            return `
-                <div class="px-4 py-12 text-center">
-                    <div class="text-gray-400 text-lg mb-2">🚫</div>
-                    <div class="text-gray-600 font-medium">Автомобілів не знайдено</div>
-                    <div class="text-gray-400 text-sm mt-1">Спробуйте змінити параметри пошуку</div>
-                </div>
-            `;
-        }
-        
-        const tableHeaders = this.generateTableHeaders(importantParts);
-        const tableRows = cars.map((car, idx) => this.generateCarRow(car, idx, importantParts)).join('');
-        
-        return `
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-[1000px]">
-                    <thead class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                        <tr>
-                            <th class="px-3 py-3 text-left text-xs font-bold uppercase">Статус</th>
-                            <th class="px-3 py-3 text-left text-xs font-bold uppercase">Номер</th>
-                            <th class="px-3 py-3 text-left text-xs font-bold uppercase mobile-hidden">Модель</th>
-                            <th class="px-3 py-3 text-left text-xs font-bold uppercase mobile-hidden">Рік</th>
-                            <th class="px-3 py-3 text-left text-xs font-bold uppercase">Місто</th>
-                            <th class="px-3 py-3 text-left text-xs font-bold uppercase">Пробіг</th>
-                            ${tableHeaders}
-                            <th class="px-3 py-3 text-center text-xs font-bold uppercase mobile-hidden">✅</th>
-                            <th class="px-3 py-3 text-center text-xs font-bold uppercase mobile-hidden">⚠️</th>
-                            <th class="px-3 py-3 text-center text-xs font-bold uppercase mobile-hidden">⛔</th>
-                            <th class="px-3 py-3 text-center text-xs font-bold uppercase">📋</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        ${tableRows}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    }
-    
     generateTableHeaders(importantParts) {
         return importantParts.map(partName => {
             let shortName, emoji;
@@ -836,91 +1115,10 @@ class CarAnalyticsApp {
         }).join('');
     }
     
-    generateCarRow(car, idx, importantParts) {
-        // Підрахунок статусів
-        const parts = Object.values(car.parts).filter(p => p !== null);
-        const criticalCount = parts.filter(p => p.status === 'critical').length;
-        const warningCount = parts.filter(p => p.status === 'warning').length;
-        const goodCount = parts.filter(p => p.status === 'good').length;
-        
-        const statusColor = criticalCount > 0 ? 'bg-red-500' : warningCount > 0 ? 'bg-orange-500' : 'bg-green-500';
-        const rowBg = idx % 2 === 0 ? 'bg-gray-50' : 'bg-white';
-        
-        const partCells = importantParts.map(partName => {
-            const part = car.parts[partName];
-            const isMonths = partName.includes('Діагностика') || partName.includes('Розвал') || partName.includes('Профілактика');
-            const display = this.getPartDisplay(part, isMonths);
-            return `<td class="px-2 py-3 text-center"><div class="${display.bg} ${display.color} font-semibold text-xs py-1 px-2 rounded whitespace-nowrap overflow-hidden text-ellipsis max-w-[80px]">${display.text}</div></td>`;
-        }).join('');
-        
-        return `
-            <tr class="${rowBg} hover:bg-blue-50 cursor-pointer transition-colors" 
-                onclick="app.setState({ selectedCar: '${car.car}' }); app.render();">
-                <td class="px-3 py-3"><div class="${statusColor} w-3 h-3 rounded-full"></div></td>
-                <td class="px-3 py-3">
-                    <div class="font-bold text-gray-800 whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]" 
-                         title="${car.license}">${car.license}</div>
-                </td>
-                <td class="px-3 py-3 mobile-hidden">
-                    <div class="text-gray-700 text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]" 
-                         title="${car.model}">${car.model}</div>
-                </td>
-                <td class="px-3 py-3 mobile-hidden">
-                    <div class="text-gray-600 text-sm whitespace-nowrap">${car.year || '-'}</div>
-                </td>
-                <td class="px-3 py-3">
-                    <div class="text-gray-600 text-sm whitespace-nowrap flex items-center gap-1">
-                        <span>📍</span>
-                        <span>${car.city || '-'}</span>
-                    </div>
-                </td>
-                <td class="px-3 py-3">
-                    <div class="font-semibold text-gray-800 whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
-                        ${car.currentMileage ? car.currentMileage.toLocaleString() + ' км' : '-'}
-                    </div>
-                </td>
-                ${partCells}
-                <td class="px-3 py-3 text-center mobile-hidden">
-                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-700 font-bold text-sm">
-                        ${goodCount}
-                    </span>
-                </td>
-                <td class="px-3 py-3 text-center mobile-hidden">
-                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 text-orange-700 font-bold text-sm">
-                        ${warningCount}
-                    </span>
-                </td>
-                <td class="px-3 py-3 text-center mobile-hidden">
-                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-red-700 font-bold text-sm">
-                        ${criticalCount}
-                    </span>
-                </td>
-                <td class="px-3 py-3 text-center">
-                    <div class="text-blue-600 font-semibold text-sm whitespace-nowrap">
-                        ${car.history.length}
-                    </div>
-                </td>
-            </tr>
-        `;
-    }
-    
-    getPartDisplay(part, isMonths = false) {
-        if (!part) return { color: 'text-gray-400', text: '-', bg: 'bg-gray-100' };
-        
-        let color = 'text-green-600', bg = 'bg-green-100';
-        if (part.status === 'warning') { color = 'text-orange-600'; bg = 'bg-orange-100'; }
-        else if (part.status === 'critical') { color = 'text-red-600'; bg = 'bg-red-100'; }
-        
-        const text = isMonths ? Math.floor(part.daysDiff / 30) + 'міс' : part.mileageDiff.toLocaleString() + ' км';
-        return { color, text, bg };
-    }
-    
-    // Логіка статусів (з оригінального коду)
     getPartStatus(partName, mileageDiff, daysDiff, carYear, carModel) {
         const monthsDiff = daysDiff / 30;
         const isMercedesSprinter = carModel && carModel.toLowerCase().includes('mercedes') && carModel.toLowerCase().includes('sprinter');
         
-        // Спеціальна логіка для Mercedes-Benz Sprinter
         if (isMercedesSprinter) {
             if (partName === 'ГРМ (ролики+ремінь) ⚙️') {
                 return 'good';
@@ -990,164 +1188,33 @@ class CarAnalyticsApp {
         return false;
     }
     
-    // Керування станом
-    setState(newState) {
-        this.state = { ...this.state, ...newState };
-        this.render();
-    }
-    
-    debouncedSearch(term) {
-        clearTimeout(this.searchTimeout);
-        this.searchTimeout = setTimeout(() => {
-            this.setState({ searchTerm: term });
-        }, 300);
-    }
-    
-    debouncedHistorySearch(term) {
-        clearTimeout(this.historySearchTimeout);
-        this.historySearchTimeout = setTimeout(() => {
-            this.setState({ historySearchTerm: term });
-        }, 300);
-    }
-    
-    clearPartFilter() {
-        this.setState({ selectedPartFilter: null });
-    }
-    
-    showPartFilterMenu(event, partName) {
-        event.stopPropagation();
+    formatDate(dateString) {
+        if (!dateString) return '';
         
-        // Видалення існуючого меню
-        const existingMenu = document.getElementById('partFilterMenu');
-        if (existingMenu) existingMenu.remove();
+        if (dateString.includes('.')) return dateString;
         
-        // Створення нового меню
-        const menu = document.createElement('div');
-        menu.id = 'partFilterMenu';
-        menu.className = 'fixed bg-white shadow-2xl rounded-lg border border-blue-400 p-3 z-50 min-w-[180px]';
-        menu.style.top = (event.clientY + 10) + 'px';
-        menu.style.left = (event.clientX - 90) + 'px';
-        menu.style.position = 'fixed';
-        
-        menu.innerHTML = `
-            <div class="text-sm font-bold text-gray-800 mb-2 pb-2 border-b">Фільтр: ${partName.split(' ')[0]}</div>
-            <div class="space-y-1">
-                <div class="px-3 py-2 hover:bg-blue-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
-                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'all' } });">
-                    📋 <span>Всі записи</span>
-                </div>
-                <div class="px-3 py-2 hover:bg-green-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
-                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'good' } });">
-                    ✅ <span>У нормі</span>
-                </div>
-                <div class="px-3 py-2 hover:bg-orange-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
-                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'warning' } });">
-                    ⚠️ <span>Увага</span>
-                </div>
-                <div class="px-3 py-2 hover:bg-red-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
-                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'critical' } });">
-                    ⛔ <span>Критично</span>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(menu);
-        
-        // Закриття меню при кліку поза ним
-        setTimeout(() => {
-            const closeMenu = (e) => {
-                if (menu && !menu.contains(e.target)) {
-                    menu.remove();
-                    document.removeEventListener('click', closeMenu);
-                }
-            };
-            document.addEventListener('click', closeMenu);
-        }, 10);
-    }
-    
-    // Оновлення даних
-    async refreshData(force = false) {
-        console.log('🔄 Оновлення даних...');
-        
-        this.showNotification('Оновлення даних...', 'info');
-        
-        try {
-            if (force) {
-                localStorage.removeItem('carAnalyticsData');
+        if (dateString.includes('-')) {
+            const parts = dateString.split('-');
+            if (parts.length === 3) {
+                const [year, month, day] = parts;
+                return `${day.padStart(2, '0')}.${month.padStart(2, '0')}.${year}`;
             }
-            
-            await this.fetchDataFromSheets();
-            this.render();
-            
-            this.showNotification('Дані успішно оновлено', 'success');
-            
-        } catch (error) {
-            console.error('❌ Помилка оновлення:', error);
-            this.showNotification('Помилка оновлення даних: ' + error.message, 'error');
         }
-    }
-    
-    startAutoRefresh() {
-        setInterval(() => {
-            this.refreshData();
-        }, window.CONFIG.REFRESH_INTERVAL * 60 * 1000);
-    }
-    
-    // Детальний перегляд автомобіля
-    generateCarDetailHTML(car) {
-        const { selectedHistoryPartFilter, historySearchTerm } = this.state;
-        const displayHistory = this.filterCarHistory(car.history, selectedHistoryPartFilter, historySearchTerm);
-        const partNames = CONSTANTS.PARTS_ORDER;
         
-        return `
-            <div class="min-h-screen">
-                <div class="mb-4 sm:mb-6">
-                    <button onclick="app.setState({ selectedCar: null, selectedHistoryPartFilter: null, historySearchTerm: '' });" 
-                            class="bg-white hover:bg-gray-100 text-blue-600 font-semibold px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 mb-3">
-                        ← Назад до списку
-                    </button>
-                    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-2xl p-4">
-                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                            <div class="flex items-center gap-3">
-                                <div class="bg-white/20 p-3 rounded-xl text-3xl">🚗</div>
-                                <div>
-                                    <div class="text-white text-xl font-bold">${car.license}</div>
-                                    <div class="text-blue-100 text-base">${car.model || 'Немає моделі'}</div>
-                                    <div class="text-blue-200 text-xs mt-1">
-                                        ${car.year ? car.year + ' рік' : ''} 
-                                        ${car.year && car.city ? ' • ' : ''}
-                                        ${car.city || ''}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="text-left sm:text-right">
-                                <div class="text-blue-100 text-xs">Поточний пробіг</div>
-                                <div class="text-white text-xl font-bold">${car.currentMileage ? car.currentMileage.toLocaleString() + ' км' : 'Немає даних'}</div>
-                                <div class="text-blue-200 text-xs mt-1">📋 ${car.history.length} записів в історії</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="max-w-[1400px] mx-auto p-4">
-                    <!-- Стан запчастин -->
-                    <div class="bg-white rounded-xl shadow-xl p-3 mb-4">
-                        ${this.generateCarPartsHTML(car, partNames)}
-                    </div>
-                    
-                    <!-- Історія обслуговування -->
-                    <div class="bg-white rounded-xl shadow-xl p-3">
-                        ${this.generateCarHistoryHTML(car, displayHistory)}
-                    </div>
-                </div>
-            </div>
-        `;
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}.${month}.${year}`;
+        }
+        
+        return dateString;
     }
     
     filterCarHistory(history, partFilter, searchTerm) {
         let filtered = [...history];
         
-        // Фільтр за частиною
         if (partFilter) {
             const keywords = CONSTANTS.PARTS_CONFIG[partFilter];
             if (keywords) {
@@ -1155,7 +1222,6 @@ class CarAnalyticsApp {
             }
         }
         
-        // Пошук за текстом
         if (searchTerm && searchTerm.trim() !== '') {
             const term = searchTerm.toLowerCase();
             filtered = filtered.filter(record => 
@@ -1169,87 +1235,6 @@ class CarAnalyticsApp {
         }
         
         return filtered;
-    }
-    
-    generateCarPartsHTML(car, partNames) {
-        const importantParts = partNames.slice(0, 8);
-        const otherParts = partNames.slice(8);
-        
-        return `
-            <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <span>🔧</span> Стан запчастин
-                ${this.state.selectedHistoryPartFilter || this.state.historySearchTerm ? `
-                    <button onclick="app.setState({ selectedHistoryPartFilter: null, historySearchTerm: '' });" 
-                            class="ml-auto bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold transition-colors">
-                        ✕ Скинути всі фільтри
-                    </button>
-                ` : ''}
-            </h3>
-            
-            <div class="mb-4">
-                <h4 class="text-base font-semibold text-blue-600 mb-2">⚡ Важливі категорії</h4>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    ${importantParts.map(partName => this.generatePartCard(car, partName)).join('')}
-                </div>
-            </div>
-            
-            <div>
-                <h4 class="text-base font-semibold text-gray-600 mb-2">🔩 Інші запчастини</h4>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                    ${otherParts.map(partName => this.generatePartCard(car, partName, true)).join('')}
-                </div>
-            </div>
-        `;
-    }
-    
-    generatePartCard(car, partName, small = false) {
-        const part = car.parts[partName];
-        const isActive = this.state.selectedHistoryPartFilter === partName;
-        
-        let borderClass = !part ? 'border-gray-200' : 
-                         part.status === 'critical' ? 'border-red-300' : 
-                         part.status === 'warning' ? 'border-orange-300' : 'border-green-300';
-        
-        let bgClass = !part ? 'bg-gray-50' : 
-                     part.status === 'critical' ? 'bg-red-50' : 
-                     part.status === 'warning' ? 'bg-orange-50' : 'bg-green-50';
-        
-        let textClass = !part ? 'text-gray-400' : 
-                       part.status === 'critical' ? 'text-red-600' : 
-                       part.status === 'warning' ? 'text-orange-600' : 'text-green-600';
-        
-        const activeClass = isActive ? 'border-2 border-blue-500 ring-2 ring-blue-200' : '';
-        const formattedDate = part ? this.formatDate(part.date) : '';
-        
-        const cardClass = small ? 'p-2 rounded border' : 'p-3 rounded-lg border';
-        const textSize = small ? 'text-xs' : 'text-sm';
-        
-        return `
-            <div class="${cardClass} ${borderClass} ${bgClass} cursor-pointer hover:shadow transition-all ${activeClass}" 
-                 onclick="app.setState({ selectedHistoryPartFilter: app.state.selectedHistoryPartFilter === '${partName}' ? null : '${partName}' });">
-                <div class="font-bold text-gray-800 ${textSize} mb-1 flex items-center justify-between">
-                    <span class="truncate" title="${partName}">${partName}</span>
-                    ${isActive ? '<span class="text-blue-500 text-xs flex-shrink-0 ml-1">🔍</span>' : ''}
-                </div>
-                ${part ? `
-                    <div class="${small ? 'space-y-0.5' : 'space-y-1'}">
-                        <div class="flex justify-between items-center">
-                            <div class="text-xs text-gray-500">Дата:</div>
-                            <div class="font-semibold text-gray-800 text-xs">${formattedDate}</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="${small ? 'text-sm' : 'text-lg'} font-bold ${textClass}">
-                                ${part.mileageDiff.toLocaleString()} км
-                            </div>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <div class="text-xs text-gray-500">Час:</div>
-                            <div class="text-xs text-gray-600">${part.timeDiff}</div>
-                        </div>
-                    </div>
-                ` : '<div class="text-gray-300 text-xs text-center py-2">Немає даних</div>'}
-            </div>
-        `;
     }
     
     generateCarHistoryHTML(car, displayHistory) {
@@ -1332,126 +1317,105 @@ class CarAnalyticsApp {
         `;
     }
     
-    generateHistoryRecordHTML(record) {
-        const formattedDate = this.formatDate(record.date);
-        const formattedQuantity = record.quantity ? record.quantity.toLocaleString() : '';
-        const formattedPrice = record.price ? record.price.toLocaleString('uk-UA', { 
-            minimumFractionDigits: 2, 
-            maximumFractionDigits: 2 
-        }) : '';
-        const formattedTotal = record.totalWithVAT ? record.totalWithVAT.toLocaleString('uk-UA', { 
-            minimumFractionDigits: 2, 
-            maximumFractionDigits: 2 
-        }) : '';
+    // Керування станом
+    setState(newState) {
+        this.state = { ...this.state, ...newState };
+        this.render();
+    }
+    
+    debouncedSearch(term) {
+        clearTimeout(this.searchTimeout);
+        this.searchTimeout = setTimeout(() => {
+            this.setState({ searchTerm: term });
+        }, 300);
+    }
+    
+    debouncedHistorySearch(term) {
+        clearTimeout(this.historySearchTimeout);
+        this.historySearchTimeout = setTimeout(() => {
+            this.setState({ historySearchTerm: term });
+        }, 300);
+    }
+    
+    clearPartFilter() {
+        this.setState({ selectedPartFilter: null });
+    }
+    
+    showPartFilterMenu(event, partName) {
+        event.stopPropagation();
         
-        // Визначення стилю статусу
-        let statusClass = 'bg-gray-100 text-gray-600';
-        let statusIcon = '📄';
-        if (record.status) {
-            const statusLower = record.status.toLowerCase();
-            if (statusLower.includes('виконано') || statusLower.includes('готово') || statusLower.includes('підтверджено')) {
-                statusClass = 'bg-green-100 text-green-700';
-                statusIcon = '✅';
-            } else if (statusLower.includes('очікує') || statusLower.includes('в обробці') || statusLower.includes('замовлено')) {
-                statusClass = 'bg-blue-100 text-blue-700';
-                statusIcon = '⏳';
-            } else if (statusLower.includes('відмов') || statusLower.includes('скасовано') || statusLower.includes('недоступно')) {
-                statusClass = 'bg-red-100 text-red-700';
-                statusIcon = '❌';
-            }
-        }
+        const existingMenu = document.getElementById('partFilterMenu');
+        if (existingMenu) existingMenu.remove();
         
-        const unitDisplay = record.unit ? record.unit : (record.quantity > 0 ? 'шт.' : '');
+        const menu = document.createElement('div');
+        menu.id = 'partFilterMenu';
+        menu.className = 'fixed bg-white shadow-2xl rounded-lg border border-blue-400 p-3 z-50 min-w-[180px]';
+        menu.style.top = (event.clientY + 10) + 'px';
+        menu.style.left = (event.clientX - 90) + 'px';
+        menu.style.position = 'fixed';
         
-        return `
-            <div class="bg-gray-50 hover:bg-gray-100 rounded-lg p-4 border border-gray-200 transition-all hover:shadow-sm">
-                <!-- ДАТА ТА ПРОБІГ -->
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2">
-                        <span class="text-base">📅</span>
-                        <span class="font-bold text-gray-800 text-sm">${formattedDate}</span>
-                    </div>
-                    <div class="flex items-center gap-2 bg-orange-50 px-3 py-1 rounded-full">
-                        <span class="text-sm">🛣️</span>
-                        <span class="font-bold text-orange-700 text-sm">${record.mileage.toLocaleString()} км</span>
-                    </div>
+        menu.innerHTML = `
+            <div class="text-sm font-bold text-gray-800 mb-2 pb-2 border-b">Фільтр: ${partName.split(' ')[0]}</div>
+            <div class="space-y-1">
+                <div class="px-3 py-2 hover:bg-blue-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
+                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'all' } });">
+                    📋 <span>Всі записи</span>
                 </div>
-                
-                <!-- ОПИС ТА ДЕТАЛІ -->
-                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                    <div class="text-gray-700 text-sm flex-1">
-                        ${record.description}
-                        ${record.partCode || record.unit || record.quantity > 0 || record.price > 0 ? `
-                            <div class="mt-2 flex flex-wrap gap-2 items-center">
-                                ${record.partCode ? `
-                                    <span class="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs">
-                                        <span>🔩</span>
-                                        <span class="font-medium">Код: ${record.partCode}</span>
-                                    </span>
-                                ` : ''}
-                                ${unitDisplay ? `
-                                    <span class="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs">
-                                        <span>📦</span>
-                                        <span>Од.: ${unitDisplay}</span>
-                                    </span>
-                                ` : ''}
-                                ${formattedQuantity ? `
-                                    <span class="inline-flex items-center gap-1 bg-blue-50 px-2 py-1 rounded text-xs">
-                                        <span>🔢</span>
-                                        <span>Кільк.: ${formattedQuantity}</span>
-                                    </span>
-                                ` : ''}
-                                ${formattedPrice ? `
-                                    <span class="inline-flex items-center gap-1 bg-blue-100 px-2 py-1 rounded text-xs">
-                                        <span>💰</span>
-                                        <span class="font-semibold">Ціна: ${formattedPrice} ₴</span>
-                                    </span>
-                                ` : ''}
-                                ${formattedTotal ? `
-                                    <span class="inline-flex items-center gap-1 bg-green-100 px-2 py-1 rounded text-xs">
-                                        <span>💵</span>
-                                        <span class="font-bold">Сума: ${formattedTotal} ₴</span>
-                                    </span>
-                                ` : ''}
-                            </div>
-                        ` : ''}
-                    </div>
-                    
-                    ${record.status ? `
-                        <div class="${statusClass} px-3 py-1 rounded text-xs font-medium whitespace-nowrap mt-2 sm:mt-0 self-start">
-                            ${statusIcon} ${record.status}
-                        </div>
-                    ` : ''}
+                <div class="px-3 py-2 hover:bg-green-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
+                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'good' } });">
+                    ✅ <span>У нормі</span>
+                </div>
+                <div class="px-3 py-2 hover:bg-orange-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
+                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'warning' } });">
+                    ⚠️ <span>Увага</span>
+                </div>
+                <div class="px-3 py-2 hover:bg-red-50 rounded cursor-pointer transition-colors text-sm flex items-center gap-2" 
+                     onclick="app.setState({ selectedPartFilter: { partName: '${partName}', status: 'critical' } });">
+                    ⛔ <span>Критично</span>
                 </div>
             </div>
         `;
+        
+        document.body.appendChild(menu);
+        
+        setTimeout(() => {
+            const closeMenu = (e) => {
+                if (menu && !menu.contains(e.target)) {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            document.addEventListener('click', closeMenu);
+        }, 10);
     }
     
-    formatDate(dateString) {
-        if (!dateString) return '';
+    async refreshData(force = false) {
+        console.log('🔄 Оновлення даних...');
         
-        if (dateString.includes('.')) return dateString;
+        this.showNotification('Оновлення даних...', 'info');
         
-        if (dateString.includes('-')) {
-            const parts = dateString.split('-');
-            if (parts.length === 3) {
-                const [year, month, day] = parts;
-                return `${day.padStart(2, '0')}.${month.padStart(2, '0')}.${year}`;
+        try {
+            if (force) {
+                localStorage.removeItem('carAnalyticsData');
             }
+            
+            await this.fetchDataFromSheets();
+            this.render();
+            
+            this.showNotification('Дані успішно оновлено', 'success');
+            
+        } catch (error) {
+            console.error('❌ Помилка оновлення:', error);
+            this.showNotification('Помилка оновлення даних: ' + error.message, 'error');
         }
-        
-        const date = new Date(dateString);
-        if (!isNaN(date.getTime())) {
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}.${month}.${year}`;
-        }
-        
-        return dateString;
     }
     
-    // Повідомлення та помилки
+    startAutoRefresh() {
+        setInterval(() => {
+            this.refreshData();
+        }, window.CONFIG.REFRESH_INTERVAL * 60 * 1000);
+    }
+    
     showNotification(message, type = 'info') {
         const container = document.getElementById('modals-container');
         const id = 'notification-' + Date.now();
@@ -1476,13 +1440,11 @@ class CarAnalyticsApp {
         
         container.appendChild(notification);
         
-        // Анімація появи
         setTimeout(() => {
             notification.classList.remove('translate-x-full');
             notification.classList.add('translate-x-0');
         }, 10);
         
-        // Автоматичне видалення
         setTimeout(() => {
             if (notification.parentNode) {
                 notification.classList.remove('translate-x-0');
