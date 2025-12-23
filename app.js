@@ -1,14 +1,14 @@
 /**
  * 🚗 Аналітична панель відстеження запчастин
- * Версія 3.1 - ОПТИМІЗОВАНА для швидкої роботи
+ * Версія 3.2 - ВИПРАВЛЕНО відображення цін та сум
  */
 
 class CarAnalyticsApp {
     constructor() {
         this.appData = null;
         this.cachedData = null;
-        this.processedCars = null; // Кеш оброблених даних
-        this.filteredCars = null; // Кеш відфільтрованих даних
+        this.processedCars = null;
+        this.filteredCars = null;
         
         this.state = {
             searchTerm: '',
@@ -43,6 +43,27 @@ class CarAnalyticsApp {
         }, 500);
 
         this.startAutoRefresh();
+    }
+
+    // ВИПРАВЛЕНА функція для парсингу чисел
+    parseNumber(value) {
+        if (value === null || value === undefined || value === '') {
+            return 0;
+        }
+        
+        // Якщо вже число
+        if (typeof value === 'number') {
+            return isNaN(value) ? 0 : value;
+        }
+        
+        // Конвертуємо в рядок і очищаємо
+        const cleanStr = String(value)
+            .trim()
+            .replace(/\s+/g, '') // Видаляємо всі пробіли
+            .replace(/,/g, '.'); // Замінюємо коми на крапки
+        
+        const parsed = parseFloat(cleanStr);
+        return isNaN(parsed) ? 0 : parsed;
     }
 
     convertToThousands(value) {
@@ -84,12 +105,20 @@ class CarAnalyticsApp {
         return `${formatted} км`;
     }
 
+    // ВИПРАВЛЕНА функція форматування ціни
     formatPrice(price) {
         if (price === null || price === undefined || isNaN(price) || price === 0) {
             return '';
         }
-        const roundedPrice = Math.round(price * 100) / 100;
-        return roundedPrice.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        
+        // Округлюємо до 2 знаків після коми
+        const rounded = Math.round(price * 100) / 100;
+        
+        // Форматуємо з пробілами для тисяч
+        const parts = rounded.toFixed(2).split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        
+        return parts.join('.');
     }
 
     setupEventListeners() {
@@ -246,6 +275,11 @@ class CarAnalyticsApp {
 
             const city = carCities[car] || '';
 
+            // ВИПРАВЛЕНО: використовуємо parseNumber для всіх числових значень
+            const quantity = row.length > CONSTANTS.COL_QUANTITY ? this.parseNumber(row[CONSTANTS.COL_QUANTITY]) : 0;
+            const price = row.length > CONSTANTS.COL_PRICE ? this.parseNumber(row[CONSTANTS.COL_PRICE]) : 0;
+            const totalWithVAT = row.length > CONSTANTS.COL_TOTAL_WITH_VAT ? this.parseNumber(row[CONSTANTS.COL_TOTAL_WITH_VAT]) : 0;
+
             records.push({
                 date: date || '',
                 city: city,
@@ -255,9 +289,9 @@ class CarAnalyticsApp {
                 description: String(row[CONSTANTS.COL_DESCRIPTION] || ''),
                 partCode: row.length > CONSTANTS.COL_PART_CODE ? String(row[CONSTANTS.COL_PART_CODE] || '').trim() : '',
                 unit: row.length > CONSTANTS.COL_UNIT ? String(row[CONSTANTS.COL_UNIT] || '').trim() : '',
-                quantity: row.length > CONSTANTS.COL_QUANTITY ? parseFloat(row[CONSTANTS.COL_QUANTITY]) || 0 : 0,
-                price: row.length > CONSTANTS.COL_PRICE ? parseFloat(row[CONSTANTS.COL_PRICE]) || 0 : 0,
-                totalWithVAT: row.length > CONSTANTS.COL_TOTAL_WITH_VAT ? parseFloat(row[CONSTANTS.COL_TOTAL_WITH_VAT]) || 0 : 0,
+                quantity: quantity,
+                price: price,
+                totalWithVAT: totalWithVAT,
                 status: row.length > CONSTANTS.COL_STATUS ? String(row[CONSTANTS.COL_STATUS] || '').trim() : ''
             });
 
@@ -283,7 +317,6 @@ class CarAnalyticsApp {
 
         document.getElementById('cars-count').textContent = allowedCars.length;
         
-        // Очищаємо кеш обробки при нових даних
         this.processedCars = null;
         this.filteredCars = null;
     }
@@ -385,7 +418,6 @@ class CarAnalyticsApp {
         }
     }
 
-    // ОПТИМІЗОВАНИЙ РЕНДЕРИНГ
     render() {
         if (!this.appData) {
             this.showError('Дані не завантажено');
@@ -433,7 +465,6 @@ class CarAnalyticsApp {
     }
 
     renderCarList() {
-        // Використовуємо кешовані дані якщо можливо
         if (!this.processedCars) {
             this.processedCars = this.processCarData();
         }
@@ -465,14 +496,12 @@ class CarAnalyticsApp {
         document.getElementById('main-interface').innerHTML = html;
     }
 
-    // ОПТИМІЗОВАНА ОБРОБКА ДАНИХ
     processCarData() {
         if (!this.appData) return [];
 
         const { records, carsInfo, currentMileages, partKeywords, partsOrder, currentDate } = this.appData;
         const cars = {};
 
-        // Ініціалізація автомобілів
         for (const license in carsInfo) {
             const carInfo = carsInfo[license];
             cars[license] = {
@@ -486,20 +515,17 @@ class CarAnalyticsApp {
                 history: []
             };
 
-            // Ініціалізація частин
             for (const partName of partsOrder) {
                 cars[license].parts[partName] = null;
             }
         }
 
-        // Обробка історії - оптимізовано
         for (const record of records) {
             const car = cars[record.car];
             if (!car) continue;
 
             car.history.push(record);
 
-            // Визначення частин
             const descLower = record.description.toLowerCase();
             for (const partName in partKeywords) {
                 const keywords = partKeywords[partName];
@@ -542,14 +568,12 @@ class CarAnalyticsApp {
             }
         }
 
-        // Сортування
         const sortedCars = Object.values(cars);
         sortedCars.sort((a, b) => {
             const cityCompare = (a.city || '').localeCompare(b.city || '', 'uk');
             return cityCompare !== 0 ? cityCompare : (a.license || '').localeCompare(b.license || '', 'uk');
         });
 
-        // Сортування історії
         for (const car of sortedCars) {
             car.history.sort((a, b) => new Date(b.date) - new Date(a.date));
         }
@@ -632,7 +656,6 @@ class CarAnalyticsApp {
         return { totalCars, carsWithGood, carsWithWarning, carsWithCritical };
     }
 
-    // ОПТИМІЗОВАНА ГЕНЕРАЦІЯ HTML
     generateCarListHTML(allCars, filteredCars, cities, stats) {
         const importantParts = CONSTANTS.PARTS_ORDER.slice(0, 7);
 
@@ -1024,7 +1047,7 @@ class CarAnalyticsApp {
                  onclick="app.setState({ selectedHistoryPartFilter: app.state.selectedHistoryPartFilter === '${partName}' ? null : '${partName}' });">
                 <div class="font-bold text-gray-800 ${textSize} mb-1 flex items-center justify-between">
                     <span class="truncate" title="${partName}">${partName}</span>
-                    ${isActive ? '<span class="text-blue-500 text-xs flex-shrink-0 ml-1">🔍</span>' : ''}
+                    ${isActive ? '<span class="text-blue-500 text-xs flex-shrink-0 ml-1">📌</span>' : ''}
                 </div>
                 ${part ? `
                     <div class="${small ? 'space-y-0.5' : 'space-y-1'}">
@@ -1055,7 +1078,7 @@ class CarAnalyticsApp {
                     <div class="flex flex-wrap items-center gap-1">
                         ${this.state.selectedHistoryPartFilter ? `
                             <span class="text-xs font-normal text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                                🔍 ${this.state.selectedHistoryPartFilter}
+                                📌 ${this.state.selectedHistoryPartFilter}
                             </span>
                         ` : ''}
                         ${this.state.historySearchTerm ? `
@@ -1127,12 +1150,13 @@ class CarAnalyticsApp {
         `;
     }
 
+    // ВИПРАВЛЕНА функція генерації HTML історії
     generateHistoryRecordHTML(record) {
         const formattedDate = this.formatDate(record.date);
         const formattedMileage = this.formatMileage(record.mileage);
-        const formattedQuantity = record.quantity ? this.formatNumber(record.quantity) : '';
-        const formattedPrice = record.price ? this.formatPrice(record.price) + ' ₴' : '';
-        const formattedTotal = record.totalWithVAT ? this.formatPrice(record.totalWithVAT) + ' ₴' : '';
+        const formattedQuantity = record.quantity && record.quantity > 0 ? this.formatNumber(record.quantity) : '';
+        const formattedPrice = record.price && record.price > 0 ? this.formatPrice(record.price) + ' ₴' : '';
+        const formattedTotal = record.totalWithVAT && record.totalWithVAT > 0 ? this.formatPrice(record.totalWithVAT) + ' ₴' : '';
 
         let statusClass = 'bg-gray-100 text-gray-600';
         let statusIcon = '🔄';
@@ -1168,7 +1192,7 @@ class CarAnalyticsApp {
                 <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                     <div class="text-gray-700 text-sm flex-1">
                         ${record.description}
-                        ${record.partCode || record.unit || record.quantity > 0 || record.price > 0 ? `
+                        ${record.partCode || record.unit || record.quantity > 0 || record.price > 0 || record.totalWithVAT > 0 ? `
                             <div class="mt-2 flex flex-wrap gap-2 items-center">
                                 ${record.partCode ? `
                                     <span class="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs">
@@ -1343,12 +1367,10 @@ class CarAnalyticsApp {
         }
     }
 
-    // ОПТИМІЗОВАНЕ КЕРУВАННЯ СТАНОМ
     setState(newState) {
         const oldState = { ...this.state };
         this.state = { ...this.state, ...newState };
         
-        // Перевіряємо що змінилось
         const needsReprocess = 
             oldState.selectedCar !== this.state.selectedCar;
         
@@ -1358,7 +1380,6 @@ class CarAnalyticsApp {
             oldState.selectedStatus !== this.state.selectedStatus ||
             JSON.stringify(oldState.selectedPartFilter) !== JSON.stringify(this.state.selectedPartFilter);
         
-        // Очищаємо кеш якщо потрібно
         if (needsRefilter) {
             this.filteredCars = null;
         }
